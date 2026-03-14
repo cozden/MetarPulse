@@ -1,0 +1,165 @@
+@page "/giris"
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@* ── Giriş Sayfası — Şifre veya Magic Link *@
+
+<div class="flex flex-col items-center justify-center min-h-screen bg-base-100 px-6">
+
+    @* Logo *@
+    <div class="mb-8 text-center">
+        <div class="text-4xl font-bold tracking-tight">
+            Metar<span class="text-primary">Pulse</span>
+        </div>
+        <p class="text-sm text-base-content/40 mt-1">Pilotlar için gerçek zamanlı METAR</p>
+    </div>
+
+    @* Tab seçimi *@
+    <div class="tabs tabs-boxed bg-base-200 mb-6 w-full max-w-sm">
+        <button class="tab flex-1 @(_tab == "magic" ? "tab-active" : "")"
+                @onclick='() => _tab = "magic"'>
+            Magic Link
+        </button>
+        <button class="tab flex-1 @(_tab == "password" ? "tab-active" : "")"
+                @onclick='() => _tab = "password"'>
+            E-posta / Şifre
+        </button>
+    </div>
+
+    <div class="card bg-base-200 border border-base-300 rounded-2xl w-full max-w-sm">
+        <div class="card-body gap-3 p-5">
+
+            @* ── Magic Link ──────────────────────────────────────────────── *@
+            @if (_tab == "magic")
+            {
+                @if (!_magicSent)
+                {
+                    <div class="text-xs text-base-content/50 text-center mb-1">
+                        E-posta adresinize tek kullanımlık giriş bağlantısı gönderilir.
+                    </div>
+                    <input class="input input-bordered w-full"
+                           type="email"
+                           placeholder="pilot@example.com"
+                           @bind="_email"
+                           @bind:event="oninput" />
+                    <button class="btn btn-primary w-full"
+                            @onclick="SendMagicLink"
+                            disabled="@(!IsValidEmail || _loading)">
+                        @if (_loading)
+                        {
+                            <span class="loading loading-spinner loading-sm"></span>
+                        }
+                        else
+                        {
+                            <span>Magic Link Gönder</span>
+                        }
+                    </button>
+                }
+                else
+                {
+                    <div class="text-center py-4">
+                        <div class="text-4xl mb-3">✉️</div>
+                        <p class="font-medium text-base-content">E-postanızı kontrol edin</p>
+                        <p class="text-sm text-base-content/50 mt-1">
+                            <span class="font-mono text-primary">@_email</span> adresine
+                            bağlantı gönderildi.
+                        </p>
+                        <p class="text-xs text-base-content/30 mt-3">15 dakika geçerlidir.</p>
+                    </div>
+                    <button class="btn btn-ghost btn-sm"
+                            @onclick="() => _magicSent = false">
+                        Tekrar gönder
+                    </button>
+                }
+            }
+
+            @* ── E-posta + Şifre ──────────────────────────────────────────── *@
+            else
+            {
+                <input class="input input-bordered w-full"
+                       type="email"
+                       placeholder="E-posta"
+                       @bind="_email"
+                       @bind:event="oninput" />
+                <input class="input input-bordered w-full"
+                       type="password"
+                       placeholder="Şifre (min. 8 karakter)"
+                       @bind="_password"
+                       @bind:event="oninput"
+                       @onkeydown="OnEnter" />
+
+                <button class="btn btn-primary w-full"
+                        @onclick="LoginWithPassword"
+                        disabled="@(!IsValidLogin || _loading)">
+                    @if (_loading)
+                    {
+                        <span class="loading loading-spinner loading-sm"></span>
+                    }
+                    else
+                    {
+                        <span>@(_isRegister ? "Kayıt Ol" : "Giriş Yap")</span>
+                    }
+                </button>
+
+                <button class="btn btn-ghost btn-xs text-base-content/40 self-center"
+                        @onclick="() => _isRegister = !_isRegister">
+                    @(_isRegister ? "Zaten hesabım var" : "Hesap oluştur")
+                </button>
+            }
+
+            @* Hata mesajı *@
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-error text-sm py-2 px-3 rounded-xl">@_error</div>
+            }
+
+        </div>
+    </div>
+
+    <p class="text-xs text-base-content/25 mt-6 text-center max-w-xs">
+        Giriş yaparak kişiselleştirilmiş METAR takibi ve bildirim hizmetlerine
+        erişim sağlarsınız.
+    </p>
+</div>
+
+@code {
+    private string _tab      = "magic";
+    private string _email    = string.Empty;
+    private string _password = string.Empty;
+    private string? _error;
+    private bool _loading;
+    private bool _magicSent;
+    private bool _isRegister;
+
+    private bool IsValidEmail => _email.Contains('@') && _email.Contains('.');
+    private bool IsValidLogin => IsValidEmail && _password.Length >= 8;
+
+    private async Task SendMagicLink()
+    {
+        _loading = true;
+        _error   = null;
+        var result = await Auth.SendMagicLinkAsync(_email.Trim());
+        _loading   = false;
+        if (result.Success) _magicSent = true;
+        else _error = result.Error;
+    }
+
+    private async Task LoginWithPassword()
+    {
+        _loading = true;
+        _error   = null;
+
+        var result = _isRegister
+            ? await Auth.RegisterAsync(_email.Trim(), _password)
+            : await Auth.LoginAsync(_email.Trim(), _password);
+
+        _loading = false;
+        if (result.Success) Nav.NavigateTo("/");
+        else _error = result.Error;
+    }
+
+    private void OnEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") _ = LoginWithPassword();
+    }
+}

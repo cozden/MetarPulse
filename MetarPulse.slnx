@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MetarPulse.Abstractions/MetarPulse.Abstractions.csproj" />
+    <Project Path="src/MetarPulse.Api/MetarPulse.Api.csproj" />
+    <Project Path="src/MetarPulse.Core/MetarPulse.Core.csproj" />
+    <Project Path="src/MetarPulse.Infrastructure/MetarPulse.Infrastructure.csproj" />
+    <Project Path="src/MetarPulse.Maui/MetarPulse.Maui.csproj" />
+    <Project Path="src/MetarPulse.Web/MetarPulse.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MetarPulse.Api.Tests/MetarPulse.Api.Tests.csproj" />
+    <Project Path="tests/MetarPulse.Core.Tests/MetarPulse.Core.Tests.csproj" />
+  </Folder>
+</Solution>

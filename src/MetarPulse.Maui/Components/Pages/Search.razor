@@ -1,0 +1,239 @@
+@page "/arama"
+@inject ApiService Api
+@inject AuthService Auth
+@inject NavigationManager Nav
+
+@* ── Meydan Arama Sayfası ────────────────────────────────────────────────── *@
+
+<div class="mb-4">
+    <h1 class="text-base font-semibold text-base-content mb-3">Meydan Ara</h1>
+
+    <div class="relative">
+        <div class="join w-full">
+            <input class="input input-bordered join-item flex-1 font-mono uppercase tracking-widest"
+                   placeholder="ICAO, IATA veya meydan adı"
+                   maxlength="50"
+                   value="@_query"
+                   @oninput="OnInput"
+                   @onkeydown="OnKeyDown"
+                   @onfocus="OnFocus"
+                   @onblur="OnBlur"
+                   autocomplete="off" />
+            <button class="btn btn-primary join-item" @onclick="SearchSelected" disabled="@(_searching || _query.Length < 2)">
+                @if (_searching)
+                {
+                    <span class="loading loading-spinner loading-xs"></span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 10.607z" />
+                    </svg>
+                }
+            </button>
+        </div>
+
+        @* ── Autocomplete dropdown ── *@
+        @if (_showSuggestions && _suggestions.Count > 0)
+        {
+            <div class="absolute z-50 w-full mt-1 rounded-xl border border-base-300 bg-base-200 shadow-xl overflow-hidden">
+                @foreach (var s in _suggestions)
+                {
+                    var suggestion = s;
+                    <button class="w-full text-left px-3 py-2.5 hover:bg-base-300 flex items-center gap-3 border-b border-base-300/50 last:border-0"
+                            @onmousedown="() => SelectSuggestion(suggestion)">
+                        <div class="font-mono text-sm font-bold text-primary w-12 flex-shrink-0">@suggestion.Ident</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs truncate">@suggestion.Name</div>
+                            <div class="text-xs text-base-content/40">
+                                @(suggestion.Municipality ?? "")@(suggestion.Municipality != null ? " · " : "")@suggestion.IsoCountry
+                                @if (suggestion.IataCode != null)
+                                {
+                                    <span class="ml-1 font-mono">(@suggestion.IataCode)</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span class="badge badge-xs @TypeBadge(suggestion.Type)">@TypeLabel(suggestion.Type)</span>
+                        </div>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@if (_result != null)
+{
+    <div class="mb-4">
+        <MetarCard Metar="@_result"
+                   ShowRaw="true"
+                   OnCardClick="@((vm) => Nav.NavigateTo($"/istasyon/{vm.StationId}"))" />
+
+        @if (Auth.IsAuthenticated)
+        {
+            <button class="btn btn-outline btn-sm btn-primary w-full mt-2" @onclick="AddToBookmarks" disabled="@_added">
+                @if (_added)
+                {
+                    <span>✓ Dashboard'a Eklendi</span>
+                }
+                else
+                {
+                    <span>Dashboard'a Ekle</span>
+                }
+            </button>
+        }
+        else
+        {
+            <button class="btn btn-outline btn-sm btn-primary w-full mt-2 opacity-60"
+                    @onclick='() => Nav.NavigateTo("/giris")'>
+                <span>Dashboard'a eklemek için giriş yap</span>
+            </button>
+        }
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-error text-sm py-2 px-3 rounded-xl">
+        @_error
+    </div>
+}
+
+@* Hızlı erişim kısayolları *@
+<div class="mt-4">
+    <div class="text-xs text-base-content/40 uppercase tracking-wider mb-2">Sık Kullanılan</div>
+    <div class="flex flex-wrap gap-2">
+        @foreach (var icao in _quickAccess)
+        {
+            <button class="btn btn-ghost btn-xs font-mono border border-base-300"
+                    @onclick="() => QuickDoSearch(icao)">
+                @icao
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    private string _query = string.Empty;
+    private MetarViewModel? _result;
+    private bool _searching;
+    private bool _added;
+    private string? _error;
+
+    private List<AirportSearchResult> _suggestions = [];
+    private bool _showSuggestions;
+    private CancellationTokenSource? _debounceCts;
+
+    private readonly string[] _quickAccess = ["LTFM", "LTBA", "LTAI", "LTAC", "LTBU", "EGLL", "EDDM", "KJFK"];
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? string.Empty;
+        _result = null;
+        _error = null;
+        _added = false;
+
+        _debounceCts?.Cancel();
+        _debounceCts = new CancellationTokenSource();
+        var ct = _debounceCts.Token;
+
+        if (_query.Length < 2)
+        {
+            _suggestions = [];
+            _showSuggestions = false;
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(250, ct);
+            _suggestions = await Api.SearchAirportsAsync(_query, ct);
+            _showSuggestions = _suggestions.Count > 0;
+            StateHasChanged();
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task SelectSuggestion(AirportSearchResult s)
+    {
+        _query = s.Ident;
+        _showSuggestions = false;
+        _suggestions = [];
+        await DoSearch(s.Ident);
+    }
+
+    private async Task SearchSelected()
+    {
+        _showSuggestions = false;
+        // Eğer tam ICAO benzeri bir girişse direkt ara, değilse ilk öneriyi al
+        if (_query.Length >= 2)
+            await DoSearch(_query.Trim().ToUpperInvariant());
+    }
+
+    private async Task DoSearch(string icao)
+    {
+        _searching = true;
+        _error = null;
+        _result = null;
+        _added = false;
+
+        try
+        {
+            _result = await Api.GetMetarAsync(icao);
+            if (_result == null) _error = $"'{icao}' için METAR bulunamadı.";
+        }
+        finally
+        {
+            _searching = false;
+        }
+    }
+
+    private async Task QuickDoSearch(string icao)
+    {
+        _query = icao;
+        _showSuggestions = false;
+        await DoSearch(icao);
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") _ = SearchSelected();
+        if (e.Key == "Escape") { _showSuggestions = false; }
+    }
+
+    private void OnFocus() => _showSuggestions = _suggestions.Count > 0;
+
+    private void OnBlur()
+    {
+        // Küçük gecikme: onmousedown event'inin önce tetiklenmesine izin ver
+        _ = Task.Delay(150).ContinueWith(_ =>
+        {
+            _showSuggestions = false;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private async Task AddToBookmarks()
+    {
+        if (_result == null || _added) return;
+        var ok = await Api.AddBookmarkAsync(_result.StationId);
+        if (ok) _added = true;
+        else _error = "Favorilere eklenemedi. Lütfen tekrar deneyin.";
+    }
+
+    private static string TypeBadge(string type) => type switch
+    {
+        "large_airport"  => "badge-primary",
+        "medium_airport" => "badge-secondary",
+        _                => "badge-ghost"
+    };
+
+    private static string TypeLabel(string type) => type switch
+    {
+        "large_airport"  => "Büyük",
+        "medium_airport" => "Orta",
+        _                => "Küçük"
+    };
+}

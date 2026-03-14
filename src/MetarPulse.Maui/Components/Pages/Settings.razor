@@ -1,0 +1,281 @@
+@page "/ayarlar"
+@inject ApiService Api
+@inject ThemeService Theme
+
+@* ── Ayarlar Sayfası ────────────────────────────────────────────────────── *@
+
+<h1 class="text-base font-semibold text-base-content mb-4">Ayarlar</h1>
+
+<div class="flex flex-col gap-3">
+
+    @* Görünüm *@
+    <div class="card bg-base-200 border border-base-300 rounded-xl">
+        <div class="card-body p-4">
+            <h2 class="text-sm font-semibold text-base-content mb-3">Görünüm</h2>
+
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-base-content">Tema</div>
+                    <div class="text-xs text-base-content/40">
+                        @(Theme.IsDark ? "Koyu mod" : "Açık mod")
+                    </div>
+                </div>
+                <label class="swap swap-rotate">
+                    <input type="checkbox" checked="@(!Theme.IsDark)" @onchange="OnThemeToggle" />
+                    @* Güneş — açık mod *@
+                    <svg class="swap-on w-6 h-6 fill-current text-warning"
+                         xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M5.64,17l-.71.71a1,1,0,0,0,0,1.41,1,1,0,0,0,1.41,0l.71-.71A1,1,0,0,0,5.64,17ZM5,12a1,1,0,0,0-1-1H3a1,1,0,0,0,0,2H4A1,1,0,0,0,5,12Zm7-7a1,1,0,0,0,1-1V3a1,1,0,0,0-2,0V4A1,1,0,0,0,12,5ZM5.64,7,4.93,6.34A1,1,0,0,0,3.52,7.76L4.22,8.46A1,1,0,0,0,5.64,7Zm12,.06a1,1,0,0,0,.71-.29l.71-.71a1,1,0,1,0-1.41-1.41L17,5.64a1,1,0,0,0,0,1.42A1,1,0,0,0,17.66,7.06ZM21,11H20a1,1,0,0,0,0,2h1a1,1,0,0,0,0-2Zm-9,8a1,1,0,0,0-1,1v1a1,1,0,0,0,2,0V20A1,1,0,0,0,12,19ZM18.36,17A1,1,0,0,0,17,18.36l.71.71a1,1,0,0,0,1.41,0,1,1,0,0,0,0-1.41ZM12,6.5A5.5,5.5,0,1,0,17.5,12,5.51,5.51,0,0,0,12,6.5Zm0,9A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"/>
+                    </svg>
+                    @* Ay — koyu mod *@
+                    <svg class="swap-off w-6 h-6 fill-current text-base-content/60"
+                         xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                        <path d="M21.64,13a1,1,0,0,0-1.05-.14,8.05,8.05,0,0,1-3.37.73A8.15,8.15,0,0,1,9.08,5.49a8.59,8.59,0,0,1,.25-2A1,1,0,0,0,8,2.36,10.14,10.14,0,1,0,22,14.05,1,1,0,0,0,21.64,13Zm-9.5,6.69A8.14,8.14,0,0,1,7.08,5.22v.27A10.15,10.15,0,0,0,17.22,15.63a9.79,9.79,0,0,0,2.1-.22A8.11,8.11,0,0,1,12.14,19.73Z"/>
+                    </svg>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    @* Birim seçimi *@
+    <div class="card bg-base-200 border border-base-300 rounded-xl">
+        <div class="card-body p-4">
+            <h2 class="text-sm font-semibold text-base-content mb-3">Birimler</h2>
+
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-base-content">Rüzgar hızı</div>
+                    <div class="text-xs text-base-content/40">Knot veya km/h</div>
+                </div>
+                <select class="select select-bordered select-sm">
+                    <option value="kt" selected>Knot (kt)</option>
+                    <option value="kmh">km/h</option>
+                    <option value="ms">m/s</option>
+                </select>
+            </div>
+
+            <div class="divider my-2"></div>
+
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="text-sm text-base-content">Görüş mesafesi</div>
+                    <div class="text-xs text-base-content/40">Metre veya mil</div>
+                </div>
+                <select class="select select-bordered select-sm">
+                    <option value="m" selected>Metre (m)</option>
+                    <option value="sm">Statute Mile (SM)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @* Bildirim tercihleri *@
+    <div class="card bg-base-200 border border-base-300 rounded-xl">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-base-content">Bildirimler</h2>
+                @if (_notifSaving)
+                {
+                    <span class="loading loading-spinner loading-xs text-primary"></span>
+                }
+                @if (_notifSaved)
+                {
+                    <span class="text-xs text-success">Kaydedildi</span>
+                }
+            </div>
+
+            @if (_notifIcao.Length < 4)
+            {
+                <div class="text-xs text-base-content/40 mb-3">
+                    Bildirim tercihleri istasyon bazlıdır. Bir istasyon ICAO kodu girin:
+                </div>
+                <div class="join w-full">
+                    <input class="input input-bordered join-item flex-1 font-mono uppercase text-sm"
+                           placeholder="LTFM"
+                           maxlength="4"
+                           @bind="_notifIcao"
+                           @bind:event="oninput" />
+                    <button class="btn btn-primary join-item btn-sm"
+                            @onclick="LoadNotifPref"
+                            disabled="@(_notifIcao.Length < 3)">
+                        Yükle
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="font-mono font-bold text-base-content">@_notifIcao.ToUpperInvariant()</span>
+                    <button class="btn btn-ghost btn-xs opacity-50" @onclick="() => _notifIcao = string.Empty">
+                        Değiştir
+                    </button>
+                </div>
+
+                <div class="flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-base-content">Her yeni METAR'da</span>
+                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                               @bind="_pref.NotifyOnEveryMetar" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-base-content">Kategori değişince</span>
+                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                               @bind="_pref.NotifyOnCategoryChange" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-base-content">SPECI yayınlanınca</span>
+                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                               @bind="_pref.NotifyOnSpeci" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-base-content">VFR koşulları sağlanınca</span>
+                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                               @bind="_pref.NotifyOnVfrAchieved" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm text-base-content">TS/CB gibi önemli hava</span>
+                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
+                               @bind="_pref.NotifyOnSignificantWeather" />
+                    </div>
+
+                    <div class="divider my-0.5"></div>
+
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="text-sm text-base-content">Rüzgar eşiği</div>
+                            <div class="text-xs text-base-content/40">0 = devre dışı</div>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <input type="number" class="input input-bordered input-sm w-16 text-center tabular-nums"
+                                   min="0" max="99"
+                                   @bind="_windThreshold" />
+                            <span class="text-xs text-base-content/40">kt</span>
+                        </div>
+                    </div>
+
+                    <div class="divider my-0.5"></div>
+
+                    @* Aktif günler *@
+                    <div>
+                        <div class="text-sm text-base-content mb-2">Aktif günler</div>
+                        <div class="flex gap-1 flex-wrap">
+                            @foreach (var (label, day) in _days)
+                            {
+                                var active = _pref.ActiveDays.Contains(day);
+                                <button class="btn btn-xs @(active ? "btn-primary" : "btn-outline opacity-50")"
+                                        @onclick="() => ToggleDay(day)">
+                                    @label
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @* Aktif saatler *@
+                    <div class="flex items-center justify-between mt-1">
+                        <div class="text-sm text-base-content">Aktif saatler</div>
+                        <div class="flex items-center gap-2">
+                            <input type="time" class="input input-bordered input-sm w-24 tabular-nums text-center"
+                                   value="@_startTime"
+                                   @onchange="e => _startTime = e.Value?.ToString() ?? _startTime" />
+                            <span class="text-xs text-base-content/40">—</span>
+                            <input type="time" class="input input-bordered input-sm w-24 tabular-nums text-center"
+                                   value="@_endTime"
+                                   @onchange="e => _endTime = e.Value?.ToString() ?? _endTime" />
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary btn-sm w-full mt-3" @onclick="SaveNotifPref">
+                    Kaydet
+                </button>
+            }
+        </div>
+    </div>
+
+    @* Uygulama hakkında *@
+    <div class="card bg-base-200 border border-base-300 rounded-xl">
+        <div class="card-body p-4">
+            <h2 class="text-sm font-semibold text-base-content mb-3">Hakkında</h2>
+            <div class="flex flex-col gap-1 text-sm text-base-content/60">
+                <div class="flex justify-between">
+                    <span>Uygulama</span>
+                    <span class="font-medium text-base-content">MetarPulse</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Versiyon</span>
+                    <span class="font-mono text-base-content">1.0.3</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Platform</span>
+                    <span class="font-mono text-base-content">.NET MAUI Blazor</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Veri kaynakları</span>
+                    <span class="text-base-content">AVWX · CheckWX · MGM · AWC</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@code {
+    private async Task OnThemeToggle(ChangeEventArgs e)
+    {
+        await Theme.ToggleAsync();
+        StateHasChanged();
+    }
+
+    private string _notifIcao = string.Empty;
+    private NotificationPref _pref = new();
+    private int _windThreshold;
+    private string _startTime = "06:00";
+    private string _endTime   = "22:00";
+    private bool _notifSaving;
+    private bool _notifSaved;
+
+    // (label, DayOfWeek int) — Pzt=1, Sal=2 … Paz=0
+    private static readonly (string Label, int Day)[] _days =
+    [
+        ("Pzt", 1), ("Sal", 2), ("Çar", 3), ("Per", 4), ("Cum", 5), ("Cmt", 6), ("Paz", 0)
+    ];
+
+    private void ToggleDay(int day)
+    {
+        if (_pref.ActiveDays.Contains(day)) _pref.ActiveDays.Remove(day);
+        else _pref.ActiveDays.Add(day);
+    }
+
+    private async Task LoadNotifPref()
+    {
+        var existing = await Api.GetNotificationPrefAsync(_notifIcao.ToUpperInvariant());
+        if (existing != null)
+        {
+            _pref = existing;
+            _windThreshold = existing.WindThresholdKnots ?? 0;
+            _startTime = existing.StartTime[..5]; // "HH:mm"
+            _endTime   = existing.EndTime[..5];
+        }
+        else
+        {
+            _pref = new NotificationPref { StationIcao = _notifIcao.ToUpperInvariant() };
+            _windThreshold = 0;
+            _startTime = "06:00";
+            _endTime   = "22:00";
+        }
+    }
+
+    private async Task SaveNotifPref()
+    {
+        _pref.StationIcao      = _notifIcao.ToUpperInvariant();
+        _pref.WindThresholdKnots = _windThreshold > 0 ? _windThreshold : null;
+        _pref.StartTime        = _startTime + ":00";
+        _pref.EndTime          = _endTime   + ":00";
+
+        _notifSaving = true;
+        _notifSaved  = false;
+        var ok = await Api.UpsertNotificationPrefAsync(_pref);
+        _notifSaving = false;
+        if (ok) { _notifSaved = true; await Task.Delay(2000); _notifSaved = false; }
+    }
+}

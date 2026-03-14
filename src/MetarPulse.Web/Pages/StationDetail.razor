@@ -1,0 +1,412 @@
+@page "/istasyon/{Icao}"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject IConfiguration Config
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Text.Json
+
+<PageTitle>@Icao — MetarPulse</PageTitle>
+
+@* ── Üst bar ────────────────────────────────────────────────────────────── *@
+<div class="flex items-center gap-3 mb-5 rounded-xl @_flashClass">
+    <button class="btn btn-ghost btn-circle btn-sm" @onclick='() => Nav.NavigateTo("/")'>
+        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+    </button>
+    <div class="flex-1">
+        <h1 class="font-mono font-bold text-2xl text-base-content tracking-widest">@Icao</h1>
+        @if (_metar != null)
+        {
+            <p class="text-xs text-base-content/40">
+                @_metar.ObservationTime.ToLocalTime().ToString("dd MMM HH:mm") yerel · @AgeMinutes dk önce
+            </p>
+        }
+    </div>
+    @if (_metar != null)
+    {
+        <span class="badge badge-lg @CategoryClass">@_metar.Category</span>
+    }
+    <button class="btn btn-ghost btn-circle btn-sm" @onclick="Refresh" disabled="@_loading">
+        @if (_loading)
+        {
+            <span class="loading loading-spinner loading-xs"></span>
+        }
+        else
+        {
+            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        }
+    </button>
+</div>
+
+@if (_loading && _metar == null)
+{
+    <div class="flex justify-center py-12">
+        <span class="loading loading-ring loading-lg text-primary"></span>
+    </div>
+}
+else if (_metar == null)
+{
+    <div class="text-center py-12 text-base-content/40">
+        <p>METAR verisi bulunamadı.</p>
+        <p class="text-sm mt-1 font-mono">@Icao</p>
+    </div>
+}
+else
+{
+    <div class="grid gap-3 md:grid-cols-2">
+
+        @* ── Rüzgar ── *@
+        <div class="card bg-base-200 border border-base-300 rounded-xl md:col-span-2">
+            <div class="card-body p-4">
+                <div class="text-xs text-base-content/40 uppercase tracking-wider mb-2">Rüzgar</div>
+                <div class="flex flex-wrap items-end gap-6">
+                    <div>
+                        <span class="text-3xl font-bold tabular-nums">
+                            @(_metar.IsVariableWind ? "VRB" : $"{_metar.WindDirection:D3}°")
+                        </span>
+                        <span class="text-2xl font-semibold @WindSpeedColor ml-1">@_metar.WindSpeed kt</span>
+                        @if (_metar.WindGust.HasValue)
+                        {
+                            <span class="text-lg text-warning ml-1">G@(_metar.WindGust)kt</span>
+                        }
+                    </div>
+                    @if (_runway != null && _runway.Runways.Count > 0)
+                    {
+                        var best = _runway.Runways[0];
+                        <div class="flex gap-4 text-sm">
+                            <div class="text-center">
+                                <div class="text-xs text-base-content/40">En İyi Pist</div>
+                                <div class="font-mono font-bold text-primary">@best.RunwayIdent</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-xs text-base-content/40">HW</div>
+                                <div class="font-semibold text-success">@best.HeadwindKnots.ToString("F0")kt</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-xs text-base-content/40">XW</div>
+                                <div class="font-semibold @XwColor(best.CrosswindKnots)">@best.CrosswindKnots.ToString("F0")kt</div>
+                            </div>
+                            @if (best.IsTailwind)
+                            {
+                                <div class="text-center">
+                                    <div class="text-xs text-error/70">TW</div>
+                                    <div class="font-semibold text-error">@best.TailwindKnots.ToString("F0")kt</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* ── Görüş & Tavan ── *@
+        <div class="card bg-base-200 border border-base-300 rounded-xl">
+            <div class="card-body p-4">
+                <div class="text-xs text-base-content/40 uppercase tracking-wider mb-1">Görüş</div>
+                <span class="text-3xl font-bold tabular-nums @VisColor">
+                    @(_metar.VisibilityMeters >= 9999 ? "9999m" : $"{_metar.VisibilityMeters}m")
+                </span>
+            </div>
+        </div>
+        <div class="card bg-base-200 border border-base-300 rounded-xl">
+            <div class="card-body p-4">
+                <div class="text-xs text-base-content/40 uppercase tracking-wider mb-1">Tavan</div>
+                <span class="text-3xl font-bold tabular-nums @CeilColor">
+                    @(_metar.CeilingFeet >= 9999 ? "CLR" : $"{_metar.CeilingFeet:N0}ft")
+                </span>
+            </div>
+        </div>
+
+        @* ── Sıcaklık / QNH ── *@
+        <div class="card bg-base-200 border border-base-300 rounded-xl">
+            <div class="card-body p-4">
+                <div class="grid grid-cols-3 gap-2">
+                    <div>
+                        <div class="text-xs text-base-content/40 mb-1">Sıcaklık</div>
+                        <span class="text-xl font-bold">@(_metar.Temperature?.ToString() ?? "—")°C</span>
+                    </div>
+                    <div>
+                        <div class="text-xs text-base-content/40 mb-1">Çiy N.</div>
+                        <span class="text-xl font-bold">@(_metar.DewPoint?.ToString() ?? "—")°C</span>
+                    </div>
+                    <div>
+                        <div class="text-xs text-base-content/40 mb-1">QNH</div>
+                        <span class="text-xl font-bold">@(_metar.AltimeterHpa?.ToString("F0") ?? "—")</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ── Bulutlar ── *@
+        @if (_metar.WeatherConditions.Count > 0 || _metar.CloudLayers.Count > 0)
+        {
+            <div class="card bg-base-200 border border-base-300 rounded-xl">
+                <div class="card-body p-4">
+                    @if (_metar.WeatherConditions.Count > 0)
+                    {
+                        <div class="text-xs text-base-content/40 uppercase tracking-wider mb-2">Hava Olayları</div>
+                        <div class="flex flex-wrap gap-2 mb-3">
+                            @foreach (var wx in _metar.WeatherConditions)
+                            {
+                                <span class="badge badge-info badge-outline font-mono">@wx</span>
+                            }
+                        </div>
+                    }
+                    @if (_metar.CloudLayers.Count > 0)
+                    {
+                        <div class="text-xs text-base-content/40 uppercase tracking-wider mb-2">Bulutlar</div>
+                        <div class="flex flex-col gap-1">
+                            @foreach (var cl in _metar.CloudLayers)
+                            {
+                                <div class="flex justify-between text-sm">
+                                    <span class="font-mono font-semibold">@cl.Coverage</span>
+                                    <span class="tabular-nums text-base-content/60">@cl.AltitudeFt.ToString("N0") ft</span>
+                                    @if (cl.Type is not ("None" or ""))
+                                    {
+                                        <span class="badge badge-warning badge-xs">@cl.Type</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @* ── Pist Analizi ── *@
+    @if (_runway != null && _runway.Runways.Count > 0)
+    {
+        <div class="card bg-base-200 border border-base-300 rounded-xl mt-3">
+            <div class="card-body p-4">
+                <div class="text-xs text-base-content/40 uppercase tracking-wider mb-3">Pist Analizi</div>
+                <div class="overflow-x-auto">
+                    <table class="table table-xs">
+                        <thead>
+                            <tr>
+                                <th>Pist</th>
+                                <th>Başlık</th>
+                                <th>HW</th>
+                                <th>XW</th>
+                                <th>TW</th>
+                                <th>Uzunluk</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (int i = 0; i < _runway.Runways.Count; i++)
+                            {
+                                var r = _runway.Runways[i];
+                                <tr class="@(i == 0 ? "bg-success/5" : "")">
+                                    <td class="font-mono font-bold @(i == 0 ? "text-primary" : "")">
+                                        @r.RunwayIdent
+                                        @if (i == 0) { <span class="badge badge-xs badge-primary ml-1">En iyi</span> }
+                                    </td>
+                                    <td class="tabular-nums">@r.HeadingDeg°</td>
+                                    <td class="tabular-nums text-success">@r.HeadwindKnots.ToString("F1")kt</td>
+                                    <td class="tabular-nums @XwColor(r.CrosswindKnots)">@r.CrosswindKnots.ToString("F1")kt</td>
+                                    <td class="tabular-nums @(r.IsTailwind ? "text-error" : "text-base-content/30")">
+                                        @(r.IsTailwind ? $"{r.TailwindKnots:F1}kt" : "—")
+                                    </td>
+                                    <td class="tabular-nums text-base-content/50">
+                                        @(r.LengthFt.HasValue ? $"{r.LengthFt:N0}ft" : "—")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Ham METAR ── *@
+    <div class="card bg-base-200 border border-base-300 rounded-xl mt-3">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-2">
+                <div class="text-xs text-base-content/40 uppercase tracking-wider">Ham METAR</div>
+                @if (_metar.SourceProvider != null)
+                {
+                    <span class="badge badge-ghost badge-xs opacity-50">@_metar.SourceProvider</span>
+                }
+            </div>
+            <div class="font-mono text-sm text-base-content/60 break-all select-all">@_metar.RawText</div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Icao { get; set; } = string.Empty;
+
+    private MetarDto? _metar;
+    private RunwayWindResult? _runway;
+    private bool _loading = true;
+    private HubConnection? _hub;
+    private string? _hubJoinedIcao;
+    private string _flashClass = "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _metar = null;
+        _runway = null;
+        try
+        {
+            var icao = Icao.ToUpperInvariant();
+            var metarTask = Http.GetFromJsonAsync<MetarDto>($"api/metar/{icao}");
+            var runwayTask = Http.GetFromJsonAsync<RunwayWindResult>($"api/runway/{icao}/wind");
+            await Task.WhenAll(metarTask, runwayTask);
+            _metar = metarTask.Result;
+            _runway = runwayTask.Result;
+        }
+        catch { }
+        finally { _loading = false; }
+
+        await ConnectHubAsync();
+    }
+
+    private async Task ConnectHubAsync()
+    {
+        if (_hub is null)
+        {
+            var apiBase = Config["ApiBaseUrl"] ?? "http://localhost:5000/";
+            _hub = new HubConnectionBuilder()
+                .WithUrl(apiBase.TrimEnd('/') + "/hubs/metar")
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hub.On<JsonElement>("ReceiveMetar", async payload =>
+            {
+                var icao = "";
+                if (payload.TryGetProperty("stationId", out var p)) icao = p.GetString() ?? "";
+                else if (payload.TryGetProperty("StationId", out var p2)) icao = p2.GetString() ?? "";
+                if (!icao.Equals(Icao, StringComparison.OrdinalIgnoreCase)) return;
+
+                await InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        var fresh = await Http.GetFromJsonAsync<MetarDto>($"api/metar/{Icao.ToUpperInvariant()}");
+                        if (fresh is null) return;
+                        _metar = fresh;
+                        _flashClass = $"flash-{_metar.Category.ToLower()}";
+                        StateHasChanged();
+                        await Task.Delay(5000);
+                        _flashClass = "";
+                        StateHasChanged();
+                    }
+                    catch { }
+                });
+            });
+
+            try { await _hub.StartAsync(); } catch { }
+        }
+
+        if (_hubJoinedIcao is not null && _hubJoinedIcao != Icao.ToUpperInvariant())
+            try { await _hub.InvokeAsync("LeaveStationAsync", _hubJoinedIcao); } catch { }
+
+        try
+        {
+            await _hub.InvokeAsync("JoinStationAsync", Icao.ToUpperInvariant());
+            _hubJoinedIcao = Icao.ToUpperInvariant();
+        }
+        catch { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hub is not null)
+        {
+            try { await _hub.InvokeAsync("LeaveStationAsync", _hubJoinedIcao ?? ""); } catch { }
+            await _hub.DisposeAsync();
+        }
+    }
+
+    private async Task Refresh()
+    {
+        _loading = true;
+        try
+        {
+            var resp = await Http.PostAsync($"api/metar/{Icao.ToUpperInvariant()}/refresh", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                var result = await resp.Content.ReadFromJsonAsync<RefreshResult>();
+                _metar = result?.Metar;
+                _runway = await Http.GetFromJsonAsync<RunwayWindResult>($"api/runway/{Icao.ToUpperInvariant()}/wind");
+            }
+        }
+        catch { }
+        finally { _loading = false; }
+    }
+
+    private int AgeMinutes => _metar == null ? 0
+        : (int)(DateTime.UtcNow - _metar.ObservationTime).TotalMinutes;
+
+    private string CategoryClass => _metar?.Category switch
+    {
+        "VFR"  => "badge-success",
+        "MVFR" => "badge-info",
+        "IFR"  => "badge-warning",
+        "LIFR" => "badge-error",
+        _      => "badge-ghost"
+    };
+
+    private string WindSpeedColor => _metar?.WindSpeed switch
+    {
+        >= 30 => "text-error",
+        >= 15 => "text-warning",
+        _ => "text-base-content"
+    };
+
+    private string VisColor => _metar?.VisibilityMeters switch
+    {
+        >= 5000 => "text-success",
+        >= 3000 => "text-info",
+        >= 800  => "text-warning",
+        _ => "text-error"
+    };
+
+    private string CeilColor => _metar?.CeilingFeet switch
+    {
+        >= 3000 => "text-success",
+        >= 1000 => "text-info",
+        >= 500  => "text-warning",
+        _ => "text-error"
+    };
+
+    private static string XwColor(double xw) => xw switch
+    {
+        > 20 => "text-error",
+        > 15 => "text-warning",
+        > 10 => "text-info",
+        _    => "text-success"
+    };
+
+    // ── DTOs ─────────────────────────────────────────────────────────────────
+
+    private record MetarDto(
+        string StationId, string RawText, DateTime ObservationTime,
+        int WindDirection, int WindSpeed, int? WindGust,
+        bool IsVariableWind, int? VariableWindFrom, int? VariableWindTo,
+        int VisibilityMeters, int CeilingFeet, string Category,
+        int? Temperature, int? DewPoint, decimal? AltimeterHpa, decimal? AltimeterInHg,
+        string? Trend, bool IsSpeci, string? SourceProvider, DateTime FetchedAt,
+        List<CloudLayerDto> CloudLayers, List<string> WeatherConditions, bool IsStale = false);
+
+    private record CloudLayerDto(string Coverage, int AltitudeFt, string Type);
+
+    private record RunwayWindResult(
+        string StationId, int WindDirection, int WindSpeed, int? WindGust,
+        List<RunwayDto> Runways);
+
+    private record RunwayDto(
+        string RunwayIdent, int HeadingDeg,
+        double HeadwindKnots, double CrosswindKnots, double TailwindKnots,
+        bool IsTailwind, int? LengthFt);
+
+    private record RefreshResult(MetarDto? Metar);
+}

@@ -1,0 +1,190 @@
+@page "/"
+@inject ApiService Api
+@inject SignalRService Hub
+@implements IDisposable
+
+@* ── Dashboard — Kaydedilmiş meydanlar ─────────────────────────────────── *@
+
+@* ── Başlık + Yenile butonu ──────────────────────────────────────────────── *@
+<div class="flex items-center justify-between mb-3">
+    <div>
+        <h1 class="text-base font-semibold text-base-content">Dashboard</h1>
+        @if (_lastUpdated.HasValue)
+        {
+            <p class="text-xs text-base-content/40">
+                @_lastUpdated.Value.ToLocalTime().ToString("HH:mm:ss") güncellendi
+            </p>
+        }
+    </div>
+    <button class="btn btn-ghost btn-sm btn-circle" @onclick="RefreshAll" disabled="@_loading">
+        @if (_loading)
+        {
+            <span class="loading loading-spinner loading-xs"></span>
+        }
+        else
+        {
+            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        }
+    </button>
+</div>
+
+@* ── İçerik ──────────────────────────────────────────────────────────────── *@
+@if (_loading && _metars.Count == 0)
+{
+    @* Skeleton yükleyici *@
+    @for (int i = 0; i < 3; i++)
+    {
+        <div class="card bg-base-200 border border-base-300 rounded-xl p-3 mb-3">
+            <div class="skeleton-line h-5 w-24 mb-3 rounded"></div>
+            <div class="grid grid-cols-4 gap-2 mb-2">
+                @for (int j = 0; j < 4; j++)
+                {
+                    <div class="skeleton-line h-8 rounded"></div>
+                }
+            </div>
+            <div class="skeleton-line h-3 w-3/4 rounded"></div>
+        </div>
+    }
+}
+else if (_metars.Count == 0 && !_loading)
+{
+    @* Boş durum *@
+    <div class="flex flex-col items-center justify-center gap-4 mt-16 text-center px-4">
+        <svg class="w-14 h-14 text-base-content/20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <div>
+            <p class="text-base-content/60 font-medium">Meydan eklenmemiş</p>
+            <p class="text-sm text-base-content/35 mt-1">Ara sekmesinden ICAO kodu ile meydan ekleyebilirsiniz.</p>
+        </div>
+        <button class="btn btn-primary btn-sm" @onclick='() => Nav.NavigateTo("/arama")'>
+            Meydan Ekle
+        </button>
+    </div>
+}
+else
+{
+    @* METAR kartları *@
+    <div class="flex flex-col gap-3">
+        @foreach (var m in _metars)
+        {
+            <MetarCard Metar="@m"
+                       ShowRaw="true"
+                       IsFlashing="@_flashingStations.Contains(m.StationId)"
+                       OnCardClick="@((vm) => OpenDetail(vm.StationId))" />
+        }
+    </div>
+}
+
+@* ── Hata toast ───────────────────────────────────────────────────────────── *@
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="toast toast-bottom toast-end z-50">
+        <div class="alert alert-error text-sm py-2 px-3">
+            <span>@_error</span>
+        </div>
+    </div>
+}
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private List<MetarViewModel> _metars = new();
+    private readonly HashSet<string> _flashingStations = new();
+    private bool _loading;
+    private string? _error;
+    private DateTime? _lastUpdated;
+    private CancellationTokenSource _cts = new();
+    private System.Timers.Timer? _refreshTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMetarsAsync();
+
+        // SignalR canlı güncellemeler
+        Hub.OnMetarReceived += OnMetarReceived;
+
+        // İstasyon gruplarına katıl
+        foreach (var m in _metars)
+            await Hub.JoinStationAsync(m.StationId);
+
+        // 5 dakikada bir otomatik yenile (fallback)
+        _refreshTimer = new System.Timers.Timer(TimeSpan.FromMinutes(5));
+        _refreshTimer.Elapsed += async (_, _) =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadMetarsAsync();
+                StateHasChanged();
+            });
+        };
+        _refreshTimer.Start();
+    }
+
+    private void OnMetarReceived(string icao, object? _payload)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            var fresh = await Api.GetMetarAsync(icao, _cts.Token);
+            if (fresh is null) return;
+            var idx = _metars.FindIndex(m => m.StationId == icao);
+            if (idx >= 0) _metars[idx] = fresh;
+            else _metars.Add(fresh);
+            _lastUpdated = DateTime.UtcNow;
+
+            // Neon flash tetikle
+            _flashingStations.Add(icao);
+            StateHasChanged();
+
+            await Task.Delay(5000);
+            _flashingStations.Remove(icao);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadMetarsAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var icaos = await Api.GetBookmarkIcaosAsync(_cts.Token);
+            if (icaos.Count == 0) { _metars = []; return; }
+
+            var results = await Api.GetBulkMetarAsync(icaos, _cts.Token);
+            _metars = results;
+            _lastUpdated = DateTime.UtcNow;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _error = "Veriler yüklenemedi. Bağlantıyı kontrol edin.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RefreshAll()
+    {
+        await LoadMetarsAsync();
+        StateHasChanged();
+    }
+
+    private void OpenDetail(string icao) =>
+        Nav.NavigateTo($"/istasyon/{icao}");
+
+    public void Dispose()
+    {
+        Hub.OnMetarReceived -= OnMetarReceived;
+        _cts.Cancel();
+        _cts.Dispose();
+        _refreshTimer?.Dispose();
+    }
+}

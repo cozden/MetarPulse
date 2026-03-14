@@ -1,0 +1,18 @@
+@* Uçuş kategorisi rozeti — VFR / MVFR / IFR / LIFR *@
+<span class="badge @BadgeClass font-mono text-xs font-semibold px-2 py-0.5 rounded-full">
+    @Category
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Category { get; set; } = "Unknown";
+    [Parameter] public string Size { get; set; } = "sm"; // sm | md | lg
+
+    private string BadgeClass => Category.ToUpperInvariant() switch
+    {
+        "VFR"  => "badge-vfr",
+        "MVFR" => "badge-mvfr",
+        "IFR"  => "badge-ifr",
+        "LIFR" => "badge-lifr",
+        _      => "badge badge-ghost opacity-50"
+    };
+}

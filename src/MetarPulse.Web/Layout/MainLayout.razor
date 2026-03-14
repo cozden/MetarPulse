@@ -1,0 +1,29 @@
+@inherits LayoutComponentBase
+
+<div class="min-h-screen bg-base-100 text-base-content">
+    @* ── Navbar ─────────────────────────────────────────────────────────── *@
+    <nav class="navbar bg-base-200 border-b border-base-300 px-4 h-14">
+        <div class="flex-1">
+            <a href="/" class="text-lg font-bold tracking-tight">
+                Metar<span class="text-primary">Pulse</span>
+            </a>
+        </div>
+        <div class="flex-none gap-2">
+            <a href="/" class="btn btn-ghost btn-sm">Dashboard</a>
+            <a href="/ara" class="btn btn-ghost btn-sm">Ara</a>
+        </div>
+    </nav>
+
+    @* ── Content ─────────────────────────────────────────────────────────── *@
+    <main class="max-w-4xl mx-auto px-4 py-6">
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui"
+     class="fixed bottom-4 inset-x-4 z-50 p-3 bg-error text-error-content text-sm rounded-xl hidden">
+    Beklenmedik bir hata oluştu.
+    <a href="." class="underline font-medium ml-2">Yenile</a>
+    <button class="float-right font-bold"
+            onclick="document.getElementById('blazor-error-ui').classList.add('hidden')">✕</button>
+</div>

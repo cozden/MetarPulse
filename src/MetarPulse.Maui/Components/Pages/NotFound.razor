@@ -1,0 +1,24 @@
+@page "/not-found"
+@layout MainLayout
+@inject NavigationManager Nav
+
+<div class="flex flex-col items-center justify-center gap-5 mt-16 text-center px-4">
+    <div class="text-6xl font-black text-base-content/10 tabular-nums">404</div>
+
+    <svg class="w-16 h-16 text-base-content/20"
+         xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1"
+              d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+    </svg>
+
+    <div>
+        <p class="font-semibold text-base-content/60">Sayfa bulunamadı</p>
+        <p class="text-sm text-base-content/35 mt-1">
+            Aradığınız sayfa mevcut değil veya taşınmış olabilir.
+        </p>
+    </div>
+
+    <button class="btn btn-primary btn-sm" @onclick='() => Nav.NavigateTo("/")'>
+        Dashboard'a Dön
+    </button>
+</div>

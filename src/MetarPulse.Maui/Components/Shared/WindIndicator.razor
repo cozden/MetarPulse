@@ -1,0 +1,40 @@
+@* Rüzgar göstergesi — yön oku + hız + gust *@
+<div class="flex items-center gap-2">
+    @if (!IsVariable)
+    {
+        <span class="wind-arrow text-base-content/70"
+              style="transform: rotate(@(Direction)deg); display:inline-block;">
+            ↑
+        </span>
+    }
+    else
+    {
+        <span class="text-base-content/50 text-sm">VRB</span>
+    }
+
+    <span class="tabular-nums font-semibold text-base-content @SpeedColorClass">
+        @Speed<span class="text-xs font-normal text-base-content/50 ml-0.5">kt</span>
+    </span>
+
+    @if (Gust.HasValue)
+    {
+        <span class="text-xs text-warning tabular-nums">
+            G@(Gust)kt
+        </span>
+    }
+</div>
+
+@code {
+    [Parameter] public int Direction { get; set; }
+    [Parameter] public int Speed { get; set; }
+    [Parameter] public int? Gust { get; set; }
+    [Parameter] public bool IsVariable { get; set; }
+
+    // Rüzgar hızına göre renk — 30kt+ kırmızı, 15kt+ sarı
+    private string SpeedColorClass => Speed switch
+    {
+        >= 30 => "text-error",
+        >= 15 => "text-warning",
+        _     => "text-base-content"
+    };
+}

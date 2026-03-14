@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="night">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>MetarPulse</title>
+    <base href="/" />
+
+    <!-- Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <!-- DaisyUI (Tailwind tabanlı) -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" />
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: ['class', '[data-theme="night"]'],
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] },
+                    colors: {
+                        vfr:  '#22c55e',
+                        mvfr: '#3b82f6',
+                        ifr:  '#ef4444',
+                        lifr: '#d946ef',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- MetarPulse custom styles -->
+    <link rel="stylesheet" href="app.css" />
+    <link rel="icon" href="data:,">
+</head>
+<body class="font-sans antialiased">
+
+    <div id="app">
+        <!-- Loading splash -->
+        <div class="flex flex-col items-center justify-center h-screen bg-base-100 gap-4">
+            <div class="text-4xl font-bold tracking-tight text-base-content">
+                Metar<span class="text-primary">Pulse</span>
+            </div>
+            <span class="loading loading-ring loading-lg text-primary"></span>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui"
+         class="fixed bottom-0 inset-x-0 z-50 p-4 bg-error text-error-content text-sm hidden">
+        Beklenmedik bir hata oluştu.
+        <a href="." class="underline font-medium">Yenile</a>
+        <button class="float-right" onclick="document.getElementById('blazor-error-ui').classList.add('hidden')">✕</button>
+    </div>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script>
+        window.metarPulse = {
+            setTheme: function (theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+            },
+            getTheme: function () {
+                return document.documentElement.getAttribute('data-theme') || 'night';
+            }
+        };
+    </script>
+</body>
+</html>

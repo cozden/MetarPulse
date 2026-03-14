@@ -1,0 +1,88 @@
+@* Pist Rüzgar Analizi Kartı — Tek pist için headwind/crosswind/tailwind *@
+<div class="flex items-center gap-3 py-2 @(IsOptimal ? "opacity-100" : "opacity-60")">
+
+    @* Pist ident + heading *@
+    <div class="flex flex-col items-center w-12 flex-shrink-0">
+        <span class="font-mono font-bold text-base text-base-content">@RunwayIdent</span>
+        <span class="text-[0.6rem] text-base-content/40">@HeadingDeg°</span>
+    </div>
+
+    @* Görsel bar göstergesi *@
+    <div class="flex-1 flex flex-col gap-1">
+        @* Headwind bar *@
+        <div class="flex items-center gap-2">
+            <span class="text-[0.6rem] text-base-content/40 w-5 text-right">HW</span>
+            <div class="flex-1 h-1.5 bg-base-300 rounded-full overflow-hidden">
+                <div class="h-full rounded-full bg-vfr"
+                     style="@($"width:{HeadwindPct}%")"></div>
+            </div>
+            <span class="text-xs font-semibold tabular-nums text-vfr w-8">@HeadwindKnots.ToString("F0")kt</span>
+        </div>
+
+        @* Crosswind bar *@
+        <div class="flex items-center gap-2">
+            <span class="text-[0.6rem] text-base-content/40 w-5 text-right">XW</span>
+            <div class="flex-1 h-1.5 bg-base-300 rounded-full overflow-hidden">
+                <div class="h-full rounded-full @CrosswindBarColor"
+                     style="@($"width:{CrosswindPct}%")"></div>
+            </div>
+            <span class="text-xs font-semibold tabular-nums @CrosswindTextColor w-8">@CrosswindKnots.ToString("F0")kt</span>
+        </div>
+
+        @* Tailwind (sadece varsa) *@
+        @if (IsTailwind)
+        {
+            <div class="flex items-center gap-2">
+                <span class="text-[0.6rem] text-error/70 w-5 text-right">TW</span>
+                <div class="flex-1 h-1.5 bg-base-300 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full bg-error"
+                         style="@($"width:{TailwindPct}%")"></div>
+                </div>
+                <span class="text-xs font-semibold tabular-nums text-error w-8">@TailwindKnots.ToString("F0")kt</span>
+            </div>
+        }
+    </div>
+
+    @* En iyi pist rozeti *@
+    @if (IsOptimal)
+    {
+        <span class="badge badge-vfr badge-xs flex-shrink-0">En iyi</span>
+    }
+    else if (IsTailwind)
+    {
+        <span class="badge badge-error badge-xs opacity-70 flex-shrink-0">TW</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string RunwayIdent { get; set; } = "";
+    [Parameter, EditorRequired] public int HeadingDeg { get; set; }
+    [Parameter, EditorRequired] public double HeadwindKnots { get; set; }
+    [Parameter, EditorRequired] public double CrosswindKnots { get; set; }
+    [Parameter, EditorRequired] public double TailwindKnots { get; set; }
+    [Parameter, EditorRequired] public bool IsTailwind { get; set; }
+    [Parameter] public bool IsOptimal { get; set; }
+    [Parameter] public int? LengthFt { get; set; }
+
+    private const double MaxKnots = 30.0;
+
+    private int HeadwindPct  => (int)Math.Min(HeadwindKnots  / MaxKnots * 100, 100);
+    private int CrosswindPct => (int)Math.Min(CrosswindKnots / MaxKnots * 100, 100);
+    private int TailwindPct  => (int)Math.Min(TailwindKnots  / MaxKnots * 100, 100);
+
+    private string CrosswindBarColor => CrosswindKnots switch
+    {
+        > 20 => "bg-lifr",
+        > 15 => "bg-ifr",
+        > 10 => "bg-warning",
+        _    => "bg-mvfr"
+    };
+
+    private string CrosswindTextColor => CrosswindKnots switch
+    {
+        > 20 => "text-lifr",
+        > 15 => "text-ifr",
+        > 10 => "text-warning",
+        _    => "text-mvfr"
+    };
+}

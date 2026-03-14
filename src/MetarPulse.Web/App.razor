@@ -1,0 +1,16 @@
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <PageTitle>Bulunamadı — MetarPulse</PageTitle>
+        <LayoutView Layout="@typeof(Layout.MainLayout)">
+            <div class="text-center py-12 text-base-content/40">
+                <p class="text-4xl font-bold mb-2">404</p>
+                <p>Sayfa bulunamadı.</p>
+                <a href="/" class="btn btn-primary btn-sm mt-4">Ana Sayfa</a>
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>

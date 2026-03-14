@@ -1,0 +1,142 @@
+@inherits LayoutComponentBase
+@inject AuthService Auth
+@inject SignalRService Hub
+@inject NavigationManager Nav
+@inject ThemeService Theme
+@implements IDisposable
+
+<div class="flex flex-col h-full bg-base-100 text-base-content">
+
+    @* ── Status bar safe area (iOS notch) ───────────────────────────────── *@
+    <div class="pt-safe bg-base-100 flex-shrink-0"></div>
+
+    @* ── Top header ─────────────────────────────────────────────────────── *@
+    <header class="flex-shrink-0 flex items-center justify-between px-4"
+            style="height: var(--header-height);">
+        <span class="text-lg font-bold tracking-tight">
+            Metar<span class="text-primary">Pulse</span>
+        </span>
+        <div class="flex items-center gap-3">
+            @* SignalR bağlantı durumu *@
+            <div class="flex items-center gap-1.5">
+                <span class="@(_connected ? "live-dot" : "live-dot offline")"
+                      title="@(_connected ? "Canlı bağlantı" : "Bağlantı yok")"></span>
+                <span class="text-xs text-base-content/35">@(_connected ? "Canlı" : "Çevrimdışı")</span>
+            </div>
+            @* Auth butonu *@
+            @if (Auth.IsAuthenticated)
+            {
+                <button class="btn btn-ghost btn-xs opacity-50" @onclick="Logout">Çıkış</button>
+            }
+            else
+            {
+                <button class="btn btn-ghost btn-xs text-primary"
+                        @onclick='() => Nav.NavigateTo("/giris")'>
+                    Giriş
+                </button>
+            }
+        </div>
+    </header>
+
+    <div class="border-b border-base-content/10 flex-shrink-0"></div>
+
+    @* ── Bildirim banner'ı ───────────────────────────────────────────────── *@
+    @if (_alert is not null)
+    {
+        <div class="flex items-start gap-2 mx-3 mt-2 p-2.5 rounded-xl bg-warning/10 border border-warning/20 fade-in">
+            <svg class="w-4 h-4 text-warning flex-shrink-0 mt-0.5" xmlns="http://www.w3.org/2000/svg"
+                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div class="flex-1 text-xs">
+                <span class="font-mono font-semibold text-warning">@_alert.StationId</span>
+                <span class="ml-1 text-warning/70">@string.Join(" · ", _alert.Reasons)</span>
+            </div>
+            <button class="text-warning/40 hover:text-warning text-xs" @onclick="DismissAlert">✕</button>
+        </div>
+    }
+
+    @* ── Page content ────────────────────────────────────────────────────── *@
+    <div class="page-body px-3 pt-3">
+        @Body
+    </div>
+
+    @* ── Bottom navigation ───────────────────────────────────────────────── *@
+    <nav class="bottom-nav bg-base-200">
+        <NavMenu />
+    </nav>
+</div>
+
+<div id="blazor-error-ui"
+     class="fixed bottom-16 inset-x-4 z-50 p-3 bg-error text-error-content text-sm rounded-xl hidden">
+    Beklenmedik bir hata oluştu.
+    <a href="." class="underline font-medium ml-2">Yenile</a>
+    <button class="float-right font-bold"
+            onclick="document.getElementById('blazor-error-ui').classList.add('hidden')">✕</button>
+</div>
+
+@code {
+    private bool _connected;
+    private AlertPayload? _alert;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        await Theme.InitializeAsync();
+        _connected = Hub.IsConnected;
+
+        Hub.OnConnectionStateChanged += OnHubStateChanged;
+        Hub.OnAlertReceived += OnAlertReceived;
+
+        if (!_connected)
+            _ = Hub.ConnectAsync();
+    }
+
+    private void OnHubStateChanged(bool connected)
+    {
+        _connected = connected;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnAlertReceived(object? payload)
+    {
+        _alert = ParseAlert(payload);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Logout()
+    {
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("/giris");
+    }
+
+    private void DismissAlert() => _alert = null;
+
+    private static AlertPayload? ParseAlert(object? payload)
+    {
+        try
+        {
+            if (payload is System.Text.Json.JsonElement el)
+            {
+                var station = el.TryGetProperty("stationId", out var s)
+                    ? s.GetString() : string.Empty;
+                var reasons = new List<string>();
+                if (el.TryGetProperty("reasons", out var r))
+                    foreach (var item in r.EnumerateArray())
+                        reasons.Add(item.GetString() ?? string.Empty);
+                return new AlertPayload(station ?? string.Empty, reasons);
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    public void Dispose()
+    {
+        Hub.OnConnectionStateChanged -= OnHubStateChanged;
+        Hub.OnAlertReceived -= OnAlertReceived;
+    }
+
+    private record AlertPayload(string StationId, List<string> Reasons);
+}

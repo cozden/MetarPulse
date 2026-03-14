@@ -1,0 +1,61 @@
+# ── Build çıktıları ──────────────────────────────────────────────────────────
+bin/
+obj/
+out/
+publish/
+
+# ── Visual Studio / Rider ─────────────────────────────────────────────────────
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# ── .NET ──────────────────────────────────────────────────────────────────────
+*.dll
+*.exe
+!src/**/wwwroot/**/*.js
+*.pdb
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ── Gizli bilgiler — ASLA push etme ─────────────────────────────────────────
+.env
+.env.*
+!.env.example
+appsettings.Production.json
+appsettings.Local.json
+secrets.json
+**/secrets/**
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ── NuGet ─────────────────────────────────────────────────────────────────────
+packages/
+*.nupkg
+nuget.config.local
+
+# ── Test çıktıları ────────────────────────────────────────────────────────────
+TestResults/
+coverage/
+*.coveragexml
+*.trx
+
+# ── MAUI ──────────────────────────────────────────────────────────────────────
+**/*.DS_Store
+**/Platforms/Android/Resources/mipmap-*/
+GeneratedCode/
+
+# ── Tailwind ──────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
