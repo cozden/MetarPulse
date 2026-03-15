@@ -139,6 +139,26 @@ public class RegionBasedProviderManager : IProviderManager
         finally { _lock.Release(); }
     }
 
+    public IReadOnlyList<IWeatherProvider> GetAllWeatherProviders() => _providers;
+
+    public async Task ReorderAsync(IEnumerable<string> globalOrder, IEnumerable<string> turkeyOrder)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            _settings.GlobalFallbackOrder = globalOrder.ToList();
+            if (_settings.RegionOverrides.TryGetValue("TR", out var tr))
+                tr.FallbackOrder = turkeyOrder.ToList();
+
+            // Priority değerlerini de güncelle
+            var global = _settings.GlobalFallbackOrder;
+            for (int i = 0; i < global.Count; i++)
+                if (_settings.Providers.TryGetValue(global[i], out var cfg))
+                    cfg.Priority = i;
+        }
+        finally { _lock.Release(); }
+    }
+
     public IReadOnlyList<ProviderHealthStatus> GetHealthStatuses()
         => _healthStatuses.Values.ToList().AsReadOnly();
 

@@ -28,9 +28,8 @@ public static class MauiProgram
         // DEBUG  → emülatör/simülatör local adresleri
         // RELEASE → Cloudflare Tunnel production URL
 #if DEBUG
-        var apiBaseUrl = DeviceInfo.Platform == DevicePlatform.Android
-            ? "http://10.0.2.2:5000/"
-            : "http://localhost:5000/";
+        // TODO: ngrok URL'ini buraya yaz → ngrok http 5000 komutunun çıktısından al
+        var apiBaseUrl = "https://gulflike-yosef-unsequenced.ngrok-free.dev";
 #else
         var apiBaseUrl = "https://api.metarpulse.senindomain.com/";
 #endif

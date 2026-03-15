@@ -8,13 +8,17 @@ set "DOCKER_BIN=C:\Program Files\Docker\Docker\resources\bin"
 if exist "%DOCKER_BIN%\docker.exe" set "PATH=%DOCKER_BIN%;%PATH%"
 
 echo.
-echo [1/3] Stopping dotnet run windows (if any)...
+echo [1/4] Stopping dotnet run windows (if any)...
 taskkill /FI "WINDOWTITLE eq MetarPulse API"  /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq MetarPulse Web"  /T /F >nul 2>&1
 taskkill /FI "WINDOWTITLE eq MetarPulse MAUI" /T /F >nul 2>&1
 taskkill /IM MetarPulse.Api.exe /T /F >nul 2>&1
 
-echo [2/3] Freeing ports 5000 / 5269 (if still in use)...
+echo [2/4] Stopping ngrok...
+taskkill /FI "WINDOWTITLE eq MetarPulse ngrok" /T /F >nul 2>&1
+taskkill /IM ngrok.exe /T /F >nul 2>&1
+
+echo [3/4] Freeing ports 5000 / 5269 (if still in use)...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5000 " ^| findstr "LISTENING"') do (
     taskkill /PID %%a /T /F >nul 2>&1
 )
@@ -22,7 +26,7 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5269 " ^| findstr "LISTENIN
     taskkill /PID %%a /T /F >nul 2>&1
 )
 
-echo [3/3] Stopping Docker services...
+echo [4/4] Stopping Docker services...
 docker compose down
 if %ERRORLEVEL% EQU 0 (
     echo Docker services stopped.

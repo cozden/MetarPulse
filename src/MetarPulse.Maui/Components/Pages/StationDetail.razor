@@ -18,7 +18,7 @@
         @if (_metar != null)
         {
             <p class="text-xs text-base-content/40">
-                @_metar.ObservationTime.ToLocalTime().ToString("dd MMM HH:mm") UTC · @_metar.AgeMinutes dk önce
+                @_metar.ObservationTime.ToLocalTime().ToString("dd MMM HH:mm") L · @_metar.AgeMinutes dk önce
             </p>
         }
     </div>
@@ -69,7 +69,7 @@ else
                     <div class="relative w-14 h-14 flex-shrink-0">
                         <div class="absolute inset-0 rounded-full border border-base-content/10 flex items-center justify-center">
                             <span class="wind-arrow text-2xl text-primary"
-                                  style="transform: rotate(@(_metar.WindDirection)deg); display:inline-block;">↑</span>
+                                  style="transform: rotate(@((_metar.WindDirection + 180) % 360)deg); display:inline-block;">↑</span>
                         </div>
                     </div>
                 }
@@ -218,7 +218,7 @@ else
                 <div class="flex items-center justify-between mb-2">
                     <div class="text-xs text-base-content/40 uppercase tracking-wider">TAF</div>
                     <span class="text-xs text-base-content/30 tabular-nums">
-                        @_taf.ValidFrom.ToLocalTime().ToString("dd MMM HH:mm") — @_taf.ValidTo.ToLocalTime().ToString("dd MMM HH:mm")
+                        @_taf.ValidFrom.ToLocalTime().ToString("dd MMM HH:mm") L — @_taf.ValidTo.ToLocalTime().ToString("dd MMM HH:mm") L
                     </span>
                 </div>
 
@@ -237,7 +237,7 @@ else
                                     }
                                 </span>
                                 <span class="text-[0.65rem] text-base-content/40 tabular-nums">
-                                    @p.From.ToLocalTime().ToString("dd MMM HH:mm") → @p.To.ToLocalTime().ToString("dd MMM HH:mm")
+                                    @p.From.ToLocalTime().ToString("dd MMM HH:mm") L → @p.To.ToLocalTime().ToString("dd MMM HH:mm") L
                                 </span>
                             </div>
                             @* Rüzgar + Görüş + Bulut *@

@@ -26,6 +26,7 @@ public static class ProviderRegistration
         services.AddHttpClient("AVWX");
         services.AddHttpClient("CheckWX");
         services.AddHttpClient("AWC");
+        services.AddHttpClient("NOAA_TGFTP");
 
         // AirportSync: büyük CSV dosyaları (airports.csv ~7MB, runways.csv ~4MB) için uzun timeout
         services.AddHttpClient("AirportSync", client =>
@@ -36,6 +37,7 @@ public static class ProviderRegistration
         services.AddScoped<IWeatherProvider, AvwxWeatherProvider>();
         services.AddScoped<IWeatherProvider, CheckWxWeatherProvider>();
         services.AddScoped<IWeatherProvider, AwcWeatherProvider>();
+        services.AddScoped<IWeatherProvider, NoaaTgftpWeatherProvider>();
 
         // Provider Manager — bölge bazlı routing + fallback zinciri
         services.AddScoped<IProviderManager, RegionBasedProviderManager>();

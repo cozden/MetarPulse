@@ -19,6 +19,7 @@ public class Metar
 
     // Görüş
     public int VisibilityMeters { get; set; }
+    public bool IsCavok { get; set; }
     public string? RvrRaw { get; set; }                         // RVR ham değer
 
     // Bulut

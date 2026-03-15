@@ -28,7 +28,14 @@ public class AwcWeatherProvider : BaseWeatherProvider
 
     public override async Task<Metar?> GetMetarAsync(string icaoCode, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(icaoCode))
+        {
+            _logger.LogWarning("AWC GetMetarAsync: boş icaoCode, istek atlandı.");
+            return null;
+        }
+
         var url = $"{Config.BaseUrl}/metar?ids={icaoCode.ToUpper()}&format=json&hours=1";
+        _logger.LogDebug("AWC METAR isteği: {Url}", url);
         var response = await GetWithResilienceAsync(url, ct);
         if (response == null || !response.IsSuccessStatusCode) return null;
 
@@ -47,7 +54,14 @@ public class AwcWeatherProvider : BaseWeatherProvider
 
     public override async Task<Taf?> GetTafAsync(string icaoCode, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(icaoCode))
+        {
+            _logger.LogWarning("AWC GetTafAsync: boş icaoCode, istek atlandı.");
+            return null;
+        }
+
         var url = $"{Config.BaseUrl}/taf?ids={icaoCode.ToUpper()}&format=json";
+        _logger.LogDebug("AWC TAF isteği: {Url}", url);
         var response = await GetWithResilienceAsync(url, ct);
         if (response == null || !response.IsSuccessStatusCode) return null;
 

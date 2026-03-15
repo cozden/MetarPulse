@@ -3,7 +3,7 @@
     @if (!IsVariable)
     {
         <span class="wind-arrow text-base-content/70"
-              style="transform: rotate(@(Direction)deg); display:inline-block;">
+              style="transform: rotate(@((Direction + 180) % 360)deg); display:inline-block;">
             ↑
         </span>
     }

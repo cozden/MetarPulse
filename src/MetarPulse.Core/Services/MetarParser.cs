@@ -141,6 +141,7 @@ public static class MetarParser
             if (tokens[i] == "CAVOK")
             {
                 metar.VisibilityMeters = 10000;
+                metar.IsCavok = true;
                 i++;
             }
             else if (tokens[i] is "////" or "/////" )

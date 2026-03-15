@@ -20,6 +20,7 @@ public class MetarViewModel
 
     // Görüş & Tavan
     public int VisibilityMeters { get; set; }
+    public bool IsCavok { get; set; }
     public int CeilingFeet { get; set; }
 
     // Kategori
@@ -74,8 +75,8 @@ public class MetarViewModel
         }
     }
 
-    /// <summary>Görüş özeti (metre veya CAVOK).</summary>
-    public string VisibilitySummary => VisibilityMeters >= 9999 ? "CAVOK" : $"{VisibilityMeters}m";
+    /// <summary>Görüş özeti — sadece asıl raporda CAVOK varsa CAVOK gösterir, aksi halde metre.</summary>
+    public string VisibilitySummary => IsCavok ? "CAVOK" : $"{VisibilityMeters}m";
 
     /// <summary>QNH özeti — her ikisi de varsa hPa tercih edilir.</summary>
     public string QnhSummary =>

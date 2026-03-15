@@ -143,7 +143,42 @@ public class ApiService
         catch { return null; }
     }
 
+    // ── Providers ─────────────────────────────────────────────────────────────
+
+    public async Task<List<ProviderInfo>> GetProvidersAsync(CancellationToken ct = default)
+    {
+        try { return await _http.GetFromJsonAsync<List<ProviderInfo>>("api/providers", ct) ?? []; }
+        catch { return []; }
+    }
+
+    public async Task<bool> SetProviderEnabledAsync(string name, bool enabled, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsync($"api/providers/{Uri.EscapeDataString(name)}/enable?enabled={enabled}", null, ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
+    public async Task<bool> ReorderProvidersAsync(List<string> globalOrder, List<string> turkeyOrder, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("api/providers/reorder",
+                new { GlobalOrder = globalOrder, TurkeyOrder = turkeyOrder }, ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch { return false; }
+    }
+
     // ── Notifications ─────────────────────────────────────────────────────────
+
+    public async Task<List<NotificationPref>> GetAllNotificationPrefsAsync(CancellationToken ct = default)
+    {
+        try { return await _http.GetFromJsonAsync<List<NotificationPref>>("api/notifications", ct) ?? []; }
+        catch { return []; }
+    }
 
     public async Task<NotificationPref?> GetNotificationPrefAsync(string icao, CancellationToken ct = default)
     {
@@ -273,6 +308,14 @@ public record AirportSearchResult(
     string? IataCode,
     double LatitudeDeg,
     double LongitudeDeg);
+
+public class ProviderInfo
+{
+    public string ProviderName { get; set; } = string.Empty;
+    public int Priority { get; set; }
+    public bool IsEnabled { get; set; }
+    public bool IsHealthy { get; set; }
+}
 
 public class NotificationPref
 {

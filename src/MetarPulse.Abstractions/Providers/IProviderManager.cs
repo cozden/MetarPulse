@@ -17,6 +17,8 @@ public interface IProviderManager
 
     Task SetProviderPriorityAsync(string providerName, int newPriority);
     Task EnableProviderAsync(string providerName, bool enabled);
+    Task ReorderAsync(IEnumerable<string> globalOrder, IEnumerable<string> turkeyOrder);
 
+    IReadOnlyList<IWeatherProvider> GetAllWeatherProviders();
     IReadOnlyList<ProviderHealthStatus> GetHealthStatuses();
 }

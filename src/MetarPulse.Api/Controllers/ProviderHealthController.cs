@@ -31,17 +31,21 @@ public class ProviderHealthController : ControllerBase
         }));
     }
 
-    /// <summary>GET /api/providers — Provider listesi ve öncelikleri</summary>
+    /// <summary>GET /api/providers — Tüm provider'lar, sıralı, sağlık durumuyla</summary>
     [HttpGet]
     public IActionResult GetProviders()
     {
-        var chain = _manager.GetWeatherProviderChain("LTFM"); // Örnek
-        return Ok(chain.Select(p => new
-        {
-            p.ProviderName,
-            p.Priority,
-            p.IsEnabled
-        }));
+        var all    = _manager.GetAllWeatherProviders();
+        var health = _manager.GetHealthStatuses().ToDictionary(h => h.ProviderName);
+        return Ok(all
+            .OrderBy(p => p.Priority)
+            .Select(p => new
+            {
+                p.ProviderName,
+                p.Priority,
+                p.IsEnabled,
+                IsHealthy = health.TryGetValue(p.ProviderName, out var h) && h.IsHealthy
+            }));
     }
 
     /// <summary>POST /api/providers/{name}/enable — Provider'ı etkinleştir/devre dışı bırak</summary>
@@ -61,4 +65,14 @@ public class ProviderHealthController : ControllerBase
             return NotFound(new { message = ex.Message });
         }
     }
+
+    /// <summary>POST /api/providers/reorder — Fallback sırasını güncelle</summary>
+    [HttpPost("reorder")]
+    public async Task<IActionResult> Reorder([FromBody] ProviderOrderRequest req, CancellationToken ct)
+    {
+        await _manager.ReorderAsync(req.GlobalOrder, req.TurkeyOrder);
+        return Ok();
+    }
+
+    public record ProviderOrderRequest(List<string> GlobalOrder, List<string> TurkeyOrder);
 }

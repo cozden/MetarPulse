@@ -69,123 +69,224 @@
         </div>
     </div>
 
-    @* Bildirim tercihleri *@
+    @* Bildirim tercihleri — meydan kartları *@
     <div class="card bg-base-200 border border-base-300 rounded-xl">
         <div class="card-body p-4">
             <div class="flex items-center justify-between mb-3">
                 <h2 class="text-sm font-semibold text-base-content">Bildirimler</h2>
-                @if (_notifSaving)
-                {
-                    <span class="loading loading-spinner loading-xs text-primary"></span>
-                }
-                @if (_notifSaved)
-                {
-                    <span class="text-xs text-success">Kaydedildi</span>
-                }
+                <button class="btn btn-ghost btn-xs text-primary" @onclick="ShowAddStation">
+                    + Meydan
+                </button>
             </div>
 
-            @if (_notifIcao.Length < 4)
+            @if (_prefsLoading)
             {
-                <div class="text-xs text-base-content/40 mb-3">
-                    Bildirim tercihleri istasyon bazlıdır. Bir istasyon ICAO kodu girin:
+                <div class="flex justify-center py-4">
+                    <span class="loading loading-spinner loading-sm text-primary"></span>
                 </div>
-                <div class="join w-full">
-                    <input class="input input-bordered join-item flex-1 font-mono uppercase text-sm"
-                           placeholder="LTFM"
-                           maxlength="4"
-                           @bind="_notifIcao"
-                           @bind:event="oninput" />
-                    <button class="btn btn-primary join-item btn-sm"
-                            @onclick="LoadNotifPref"
-                            disabled="@(_notifIcao.Length < 3)">
-                        Yükle
-                    </button>
+            }
+            else if (_allPrefs.Count == 0 && !_addingNew)
+            {
+                <div class="text-xs text-base-content/40 text-center py-3">
+                    Henüz meydan eklenmedi. Yukarıdaki + Meydan butonuna dokun.
                 </div>
             }
             else
             {
-                <div class="flex items-center gap-2 mb-3">
-                    <span class="font-mono font-bold text-base-content">@_notifIcao.ToUpperInvariant()</span>
-                    <button class="btn btn-ghost btn-xs opacity-50" @onclick="() => _notifIcao = string.Empty">
-                        Değiştir
-                    </button>
-                </div>
+                <div class="flex flex-col gap-2">
+                    @foreach (var pref in _allPrefs)
+                    {
+                        var icao = pref.StationIcao;
+                        var expanded = _expandedIcao == icao;
+                        <div class="rounded-lg bg-base-100 border border-base-300 overflow-hidden">
+                            @* Kart başlığı *@
+                            <button class="w-full flex items-center justify-between px-3 py-2.5 text-left"
+                                    @onclick="() => ToggleExpand(icao)">
+                                <span class="font-mono font-bold text-sm text-base-content">@icao</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[0.6rem] text-base-content/40">
+                                        @NotifSummary(pref)
+                                    </span>
+                                    <span class="text-base-content/40 text-xs">@(expanded ? "▲" : "▼")</span>
+                                </div>
+                            </button>
 
-                <div class="flex flex-col gap-2.5">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm text-base-content">Her yeni METAR'da</span>
-                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
-                               @bind="_pref.NotifyOnEveryMetar" />
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm text-base-content">Kategori değişince</span>
-                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
-                               @bind="_pref.NotifyOnCategoryChange" />
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm text-base-content">SPECI yayınlanınca</span>
-                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
-                               @bind="_pref.NotifyOnSpeci" />
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm text-base-content">VFR koşulları sağlanınca</span>
-                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
-                               @bind="_pref.NotifyOnVfrAchieved" />
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm text-base-content">TS/CB gibi önemli hava</span>
-                        <input type="checkbox" class="toggle toggle-primary toggle-sm"
-                               @bind="_pref.NotifyOnSignificantWeather" />
-                    </div>
-
-                    <div class="divider my-0.5"></div>
-
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm text-base-content">Rüzgar eşiği</div>
-                            <div class="text-xs text-base-content/40">0 = devre dışı</div>
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <input type="number" class="input input-bordered input-sm w-16 text-center tabular-nums"
-                                   min="0" max="99"
-                                   @bind="_windThreshold" />
-                            <span class="text-xs text-base-content/40">kt</span>
-                        </div>
-                    </div>
-
-                    <div class="divider my-0.5"></div>
-
-                    @* Aktif günler *@
-                    <div>
-                        <div class="text-sm text-base-content mb-2">Aktif günler</div>
-                        <div class="flex gap-1 flex-wrap">
-                            @foreach (var (label, day) in _days)
+                            @* Genişletilmiş içerik *@
+                            @if (expanded)
                             {
-                                var active = _pref.ActiveDays.Contains(day);
-                                <button class="btn btn-xs @(active ? "btn-primary" : "btn-outline opacity-50")"
-                                        @onclick="() => ToggleDay(day)">
-                                    @label
-                                </button>
+                                <div class="px-3 pb-3 flex flex-col gap-2 border-t border-base-300/50 pt-2.5">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-base-content">Her yeni METAR</span>
+                                        <input type="checkbox" class="toggle toggle-primary toggle-xs"
+                                               checked="@pref.NotifyOnEveryMetar"
+                                               @onchange="e => pref.NotifyOnEveryMetar = (bool)(e.Value ?? false)" />
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-base-content">Kategori değisince</span>
+                                        <input type="checkbox" class="toggle toggle-primary toggle-xs"
+                                               checked="@pref.NotifyOnCategoryChange"
+                                               @onchange="e => pref.NotifyOnCategoryChange = (bool)(e.Value ?? false)" />
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-base-content">SPECI yayinlaninca</span>
+                                        <input type="checkbox" class="toggle toggle-primary toggle-xs"
+                                               checked="@pref.NotifyOnSpeci"
+                                               @onchange="e => pref.NotifyOnSpeci = (bool)(e.Value ?? false)" />
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-base-content">VFR kosullari saglaninca</span>
+                                        <input type="checkbox" class="toggle toggle-primary toggle-xs"
+                                               checked="@pref.NotifyOnVfrAchieved"
+                                               @onchange="e => pref.NotifyOnVfrAchieved = (bool)(e.Value ?? false)" />
+                                    </div>
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-base-content">TS/CB onemli hava</span>
+                                        <input type="checkbox" class="toggle toggle-primary toggle-xs"
+                                               checked="@pref.NotifyOnSignificantWeather"
+                                               @onchange="e => pref.NotifyOnSignificantWeather = (bool)(e.Value ?? false)" />
+                                    </div>
+
+                                    <div class="divider my-0.5"></div>
+
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="text-xs text-base-content">Rüzgar esigi</div>
+                                            <div class="text-[0.6rem] text-base-content/40">0 = kapali</div>
+                                        </div>
+                                        <div class="flex items-center gap-1">
+                                            <input type="number" class="input input-bordered input-xs w-14 text-center tabular-nums"
+                                                   min="0" max="99"
+                                                   value="@(pref.WindThresholdKnots ?? 0)"
+                                                   @onchange="e => pref.WindThresholdKnots = int.TryParse(e.Value?.ToString(), out var v) && v > 0 ? v : null" />
+                                            <span class="text-[0.6rem] text-base-content/40">kt</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="divider my-0.5"></div>
+
+                                    @* Aktif günler *@
+                                    <div>
+                                        <div class="text-xs text-base-content mb-1.5">Aktif günler</div>
+                                        <div class="flex gap-1 flex-wrap">
+                                            @foreach (var (label, day) in _days)
+                                            {
+                                                var active = pref.ActiveDays.Contains(day);
+                                                <button class="btn btn-xs @(active ? "btn-primary" : "btn-outline opacity-50")"
+                                                        @onclick="() => TogglePrefDay(pref, day)">
+                                                    @label
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    @* Aktif saatler *@
+                                    <div class="flex items-center justify-between">
+                                        <div class="text-xs text-base-content">Aktif saatler</div>
+                                        <div class="flex items-center gap-1.5">
+                                            <input type="time" class="input input-bordered input-xs w-22 tabular-nums text-center"
+                                                   value="@pref.StartTime[..5]"
+                                                   @onchange="e => SetPrefTime(pref, true, e.Value?.ToString())" />
+                                            <span class="text-[0.6rem] text-base-content/40">—</span>
+                                            <input type="time" class="input input-bordered input-xs w-22 tabular-nums text-center"
+                                                   value="@pref.EndTime[..5]"
+                                                   @onchange="e => SetPrefTime(pref, false, e.Value?.ToString())" />
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-2 mt-1">
+                                        <button class="btn btn-primary btn-xs flex-1"
+                                                disabled="@(_savingIcao == icao)"
+                                                @onclick="() => SavePref(pref)">
+                                            @if (_savingIcao == icao) { <span class="loading loading-spinner loading-xs"></span> }
+                                            else { <span>Kaydet</span> }
+                                        </button>
+                                        <button class="btn btn-ghost btn-xs text-error"
+                                                @onclick="() => DeletePref(icao)">
+                                            Sil
+                                        </button>
+                                    </div>
+                                </div>
                             }
                         </div>
-                    </div>
+                    }
+                </div>
+            }
 
-                    @* Aktif saatler *@
-                    <div class="flex items-center justify-between mt-1">
-                        <div class="text-sm text-base-content">Aktif saatler</div>
-                        <div class="flex items-center gap-2">
-                            <input type="time" class="input input-bordered input-sm w-24 tabular-nums text-center"
-                                   value="@_startTime"
-                                   @onchange="e => _startTime = e.Value?.ToString() ?? _startTime" />
-                            <span class="text-xs text-base-content/40">—</span>
-                            <input type="time" class="input input-bordered input-sm w-24 tabular-nums text-center"
-                                   value="@_endTime"
-                                   @onchange="e => _endTime = e.Value?.ToString() ?? _endTime" />
+            @* Yeni meydan ekleme satırı *@
+            @if (_addingNew)
+            {
+                <div class="flex gap-2 mt-2">
+                    <input class="input input-bordered input-sm flex-1 font-mono uppercase"
+                           placeholder="LTFM"
+                           maxlength="4"
+                           value="@_newIcao"
+                           @oninput="e => _newIcao = e.Value?.ToString()?.ToUpperInvariant() ?? string.Empty" />
+                    <button class="btn btn-primary btn-sm"
+                            disabled="@(_newIcao.Length < 4 || _addingLoading)"
+                            @onclick="AddNewStation">
+                        @if (_addingLoading) { <span class="loading loading-spinner loading-xs"></span> }
+                        else { <span>Ekle</span> }
+                    </button>
+                    <button class="btn btn-ghost btn-sm" @onclick="() => _addingNew = false">
+                        Iptal
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Sağlayıcılar *@
+    <div class="card bg-base-200 border border-base-300 rounded-xl">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-1">
+                <h2 class="text-sm font-semibold text-base-content">Sağlayıcılar</h2>
+                @if (_providerSaving)
+                {
+                    <span class="loading loading-spinner loading-xs text-primary"></span>
+                }
+                @if (_providerSaved)
+                {
+                    <span class="text-xs text-success">Kaydedildi</span>
+                }
+            </div>
+            <div class="text-xs text-base-content/40 mb-3">Sürükleyerek öncelik sırası belirleyin.</div>
+
+            @if (_providers.Count == 0)
+            {
+                <div class="text-xs text-base-content/40">Yükleniyor...</div>
+            }
+            else
+            {
+                <div class="flex flex-col gap-1.5">
+                    @for (int i = 0; i < _providers.Count; i++)
+                    {
+                        var idx = i;
+                        var p = _providers[idx];
+                        <div class="flex items-center gap-2 p-2.5 rounded-lg bg-base-100 border border-base-300 @(!p.IsEnabled ? "opacity-50" : "")">
+                            <div class="flex flex-col gap-0.5">
+                                <button class="btn btn-ghost btn-xs px-1 py-0 min-h-0 h-4 leading-none disabled:opacity-20"
+                                        disabled="@(idx == 0)"
+                                        @onclick="() => MoveProvider(idx, -1)">&#9650;</button>
+                                <button class="btn btn-ghost btn-xs px-1 py-0 min-h-0 h-4 leading-none disabled:opacity-20"
+                                        disabled="@(idx == _providers.Count - 1)"
+                                        @onclick="() => MoveProvider(idx, 1)">&#9660;</button>
+                            </div>
+                            <span class="w-4 text-center text-xs text-base-content/30 tabular-nums">@(idx + 1)</span>
+                            <span class="flex-1 text-xs font-mono font-semibold text-base-content">@p.ProviderName</span>
+                            @if (p.IsEnabled)
+                            {
+                                <span class="badge badge-xs @(p.IsHealthy ? "badge-success" : "badge-warning")">
+                                    @(p.IsHealthy ? "OK" : "Hata")
+                                </span>
+                            }
+                            <input type="checkbox" class="toggle toggle-primary toggle-xs"
+                                   checked="@p.IsEnabled"
+                                   @onchange="e => p.IsEnabled = (bool)(e.Value ?? false)" />
                         </div>
-                    </div>
+                    }
                 </div>
 
-                <button class="btn btn-primary btn-sm w-full mt-3" @onclick="SaveNotifPref">
+                <button class="btn btn-primary btn-sm w-full mt-3" @onclick="SaveProviders">
                     Kaydet
                 </button>
             }
@@ -211,7 +312,7 @@
                 </div>
                 <div class="flex justify-between">
                     <span>Veri kaynakları</span>
-                    <span class="text-base-content">AVWX · CheckWX · MGM · AWC</span>
+                    <span class="text-base-content">AVWX · CheckWX · MGM · AWC · NOAA</span>
                 </div>
             </div>
         </div>
@@ -226,56 +327,136 @@
         StateHasChanged();
     }
 
-    private string _notifIcao = string.Empty;
-    private NotificationPref _pref = new();
-    private int _windThreshold;
-    private string _startTime = "06:00";
-    private string _endTime   = "22:00";
-    private bool _notifSaving;
-    private bool _notifSaved;
+    // ── Providers ─────────────────────────────────────────────────────────────
+
+    private List<ProviderInfo> _providers = [];
+    private bool _providerSaving;
+    private bool _providerSaved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _providers = await Api.GetProvidersAsync();
+        _prefsLoading = true;
+        _allPrefs = await Api.GetAllNotificationPrefsAsync();
+        _prefsLoading = false;
+    }
+
+    private void MoveProvider(int idx, int direction)
+    {
+        var newIdx = idx + direction;
+        if (newIdx < 0 || newIdx >= _providers.Count) return;
+        var item = _providers[idx];
+        _providers.RemoveAt(idx);
+        _providers.Insert(newIdx, item);
+    }
+
+    private async Task SaveProviders()
+    {
+        _providerSaving = true;
+        _providerSaved  = false;
+
+        foreach (var p in _providers)
+            await Api.SetProviderEnabledAsync(p.ProviderName, p.IsEnabled);
+
+        var ordered  = _providers.Where(p => p.IsEnabled).Select(p => p.ProviderName).ToList();
+        var global   = ordered.Where(n => n != "MGM_RASAT").ToList();
+        var turkey   = ordered.ToList();
+        await Api.ReorderProvidersAsync(global, turkey);
+
+        _providerSaving = false;
+        _providerSaved  = true;
+        await Task.Delay(2000);
+        _providerSaved  = false;
+    }
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+
+    private List<NotificationPref> _allPrefs = [];
+    private bool _prefsLoading;
+    private string? _expandedIcao;
+    private string? _savingIcao;
+
+    // Yeni meydan ekleme
+    private bool _addingNew;
+    private bool _addingLoading;
+    private string _newIcao = string.Empty;
 
     // (label, DayOfWeek int) — Pzt=1, Sal=2 … Paz=0
     private static readonly (string Label, int Day)[] _days =
     [
-        ("Pzt", 1), ("Sal", 2), ("Çar", 3), ("Per", 4), ("Cum", 5), ("Cmt", 6), ("Paz", 0)
+        ("Pzt", 1), ("Sal", 2), ("Car", 3), ("Per", 4), ("Cum", 5), ("Cmt", 6), ("Paz", 0)
     ];
 
-    private void ToggleDay(int day)
+    private void ToggleExpand(string icao) =>
+        _expandedIcao = _expandedIcao == icao ? null : icao;
+
+    private void TogglePrefDay(NotificationPref pref, int day)
     {
-        if (_pref.ActiveDays.Contains(day)) _pref.ActiveDays.Remove(day);
-        else _pref.ActiveDays.Add(day);
+        if (pref.ActiveDays.Contains(day)) pref.ActiveDays.Remove(day);
+        else pref.ActiveDays.Add(day);
     }
 
-    private async Task LoadNotifPref()
+    private string NotifSummary(NotificationPref pref)
     {
-        var existing = await Api.GetNotificationPrefAsync(_notifIcao.ToUpperInvariant());
-        if (existing != null)
-        {
-            _pref = existing;
-            _windThreshold = existing.WindThresholdKnots ?? 0;
-            _startTime = existing.StartTime[..5]; // "HH:mm"
-            _endTime   = existing.EndTime[..5];
-        }
-        else
-        {
-            _pref = new NotificationPref { StationIcao = _notifIcao.ToUpperInvariant() };
-            _windThreshold = 0;
-            _startTime = "06:00";
-            _endTime   = "22:00";
-        }
+        var parts = new List<string>();
+        if (pref.NotifyOnEveryMetar) parts.Add("Her METAR");
+        if (pref.NotifyOnCategoryChange) parts.Add("Kategori");
+        if (pref.NotifyOnSignificantWeather) parts.Add("TS/CB");
+        return parts.Count > 0 ? string.Join(" · ", parts) : "Kapalı";
     }
 
-    private async Task SaveNotifPref()
+    private void ShowAddStation()
     {
-        _pref.StationIcao      = _notifIcao.ToUpperInvariant();
-        _pref.WindThresholdKnots = _windThreshold > 0 ? _windThreshold : null;
-        _pref.StartTime        = _startTime + ":00";
-        _pref.EndTime          = _endTime   + ":00";
+        _addingNew = true;
+        _newIcao = string.Empty;
+    }
 
-        _notifSaving = true;
-        _notifSaved  = false;
-        var ok = await Api.UpsertNotificationPrefAsync(_pref);
-        _notifSaving = false;
-        if (ok) { _notifSaved = true; await Task.Delay(2000); _notifSaved = false; }
+    private async Task AddNewStation()
+    {
+        if (_newIcao.Length < 4) return;
+        _addingLoading = true;
+        StateHasChanged();
+
+        var existing = await Api.GetNotificationPrefAsync(_newIcao);
+        var pref = existing ?? new NotificationPref
+        {
+            StationIcao = _newIcao,
+            StartTime = "06:00:00",
+            EndTime = "22:00:00",
+            ActiveDays = [0, 1, 2, 3, 4, 5, 6]
+        };
+
+        if (!_allPrefs.Any(p => p.StationIcao == _newIcao))
+            _allPrefs.Add(pref);
+
+        _expandedIcao = _newIcao;
+        _addingNew = false;
+        _addingLoading = false;
+        StateHasChanged();
+    }
+
+    private async Task SavePref(NotificationPref pref)
+    {
+        _savingIcao = pref.StationIcao;
+        StateHasChanged();
+        await Api.UpsertNotificationPrefAsync(pref);
+        _savingIcao = null;
+        _expandedIcao = null;
+        StateHasChanged();
+    }
+
+    private void SetPrefTime(NotificationPref pref, bool isStart, string? val)
+    {
+        if (string.IsNullOrEmpty(val)) return;
+        if (isStart) pref.StartTime = val + ":00";
+        else pref.EndTime = val + ":00";
+    }
+
+    private async Task DeletePref(string icao)
+    {
+        await Api.DeleteNotificationPrefAsync(icao);
+        _allPrefs.RemoveAll(p => p.StationIcao == icao);
+        if (_expandedIcao == icao) _expandedIcao = null;
+        StateHasChanged();
     }
 }

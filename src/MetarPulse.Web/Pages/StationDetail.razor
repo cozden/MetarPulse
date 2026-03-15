@@ -237,6 +237,75 @@ else
             <div class="font-mono text-sm text-base-content/60 break-all select-all">@_metar.RawText</div>
         </div>
     </div>
+
+    @* ── TAF ── *@
+    @if (_taf != null)
+    {
+        <div class="card bg-base-200 border border-base-300 rounded-xl mt-3">
+            <div class="card-body p-4">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="text-xs text-base-content/40 uppercase tracking-wider">TAF</div>
+                    <span class="text-xs text-base-content/30 tabular-nums">
+                        @_taf.ValidFrom.ToString("dd MMM HH:mmZ") — @_taf.ValidTo.ToString("dd MMM HH:mmZ")
+                    </span>
+                </div>
+
+                <div class="flex flex-col divide-y divide-base-300/40">
+                    @foreach (var p in _taf.Periods)
+                    {
+                        <div class="py-2 first:pt-0 last:pb-0">
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="font-mono text-xs font-semibold @TafPeriodColor(p.ChangeIndicator)">
+                                    @(string.IsNullOrEmpty(p.ChangeIndicator) || p.ChangeIndicator == "BASE" ? "BASE" : p.ChangeIndicator)
+                                    @if (p.Probability.HasValue)
+                                    {
+                                        <span class="text-base-content/40"> PROB@(p.Probability)</span>
+                                    }
+                                </span>
+                                <span class="text-[0.65rem] text-base-content/40 tabular-nums">
+                                    @p.From.ToString("dd MMM HH:mmZ") → @p.To.ToString("dd MMM HH:mmZ")
+                                </span>
+                            </div>
+                            <div class="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-base-content/70">
+                                @if (p.WindDirection.HasValue && p.WindSpeed.HasValue)
+                                {
+                                    <span class="tabular-nums">
+                                        <span class="text-base-content/40">WND</span>
+                                        @($"{p.WindDirection:D3}°/{p.WindSpeed}kt")
+                                        @if (p.WindGust.HasValue)
+                                        {
+                                            <span class="text-warning"> G@(p.WindGust)kt</span>
+                                        }
+                                    </span>
+                                }
+                                @if (p.VisibilityMeters.HasValue)
+                                {
+                                    <span class="tabular-nums">
+                                        <span class="text-base-content/40">VIS</span>
+                                        @(p.VisibilityMeters >= 9999 ? "9999m" : $"{p.VisibilityMeters}m")
+                                    </span>
+                                }
+                                @foreach (var wx in p.WeatherConditions)
+                                {
+                                    <span class="font-mono text-info">@wx</span>
+                                }
+                                @foreach (var cl in p.CloudLayers)
+                                {
+                                    <span class="tabular-nums">
+                                        @cl.Coverage @(cl.AltitudeFt.ToString("N0"))ft@(cl.Type is not ("None" or "") ? $" {cl.Type}" : "")
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                <div class="font-mono text-xs text-base-content/40 pt-3 mt-1 border-t border-base-300/50 break-all">
+                    @_taf.RawText
+                </div>
+            </div>
+        </div>
+    }
 }
 
 @code {
@@ -244,6 +313,7 @@ else
 
     private MetarDto? _metar;
     private RunwayWindResult? _runway;
+    private TafResult? _taf;
     private bool _loading = true;
     private HubConnection? _hub;
     private string? _hubJoinedIcao;
@@ -254,14 +324,17 @@ else
         _loading = true;
         _metar = null;
         _runway = null;
+        _taf = null;
         try
         {
             var icao = Icao.ToUpperInvariant();
-            var metarTask = Http.GetFromJsonAsync<MetarDto>($"api/metar/{icao}");
+            var metarTask  = Http.GetFromJsonAsync<MetarDto>($"api/metar/{icao}");
             var runwayTask = Http.GetFromJsonAsync<RunwayWindResult>($"api/runway/{icao}/wind");
-            await Task.WhenAll(metarTask, runwayTask);
-            _metar = metarTask.Result;
+            var tafTask    = Http.GetFromJsonAsync<TafResult>($"api/metar/{icao}/taf");
+            await Task.WhenAll(metarTask, runwayTask, tafTask);
+            _metar  = metarTask.Result;
             _runway = runwayTask.Result;
+            _taf    = tafTask.Result;
         }
         catch { }
         finally { _loading = false; }
@@ -409,4 +482,24 @@ else
         bool IsTailwind, int? LengthFt);
 
     private record RefreshResult(MetarDto? Metar);
+
+    private record TafResult(
+        string StationId, string RawText,
+        DateTime IssueTime, DateTime ValidFrom, DateTime ValidTo,
+        string? SourceProvider, List<TafPeriodDto> Periods);
+
+    private record TafPeriodDto(
+        DateTime From, DateTime To, string ChangeIndicator,
+        int? Probability, int? WindDirection, int? WindSpeed, int? WindGust,
+        int? VisibilityMeters, List<TafCloudDto> CloudLayers, List<string> WeatherConditions);
+
+    private record TafCloudDto(string Coverage, int AltitudeFt, string Type);
+
+    private static string TafPeriodColor(string? indicator) => indicator switch
+    {
+        "TEMPO" => "text-warning",
+        "BECMG" => "text-info",
+        var s when s?.StartsWith("FM") == true => "text-primary",
+        _ => "text-base-content/70"
+    };
 }
