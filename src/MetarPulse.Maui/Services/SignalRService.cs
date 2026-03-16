@@ -14,6 +14,13 @@ public class SignalRService : IAsyncDisposable
 
     private HubConnection? _connection;
 
+    /// <summary>
+    /// İlk bağlantı task'ı — birden fazla çağıranın aynı task'ı await etmesi için cache'lenir.
+    /// Böylece MainLayout fire-and-forget başlatsa bile Home.razor await ederek gerçek
+    /// bağlantı kurulumunu bekleyebilir.
+    /// </summary>
+    private Task? _connectTask;
+
     // ── Olaylar ───────────────────────────────────────────────────────────────
     public event Action<string, object?>? OnMetarReceived;   // (icao, payload)
     public event Action<object?>? OnAlertReceived;           // alert payload
@@ -30,10 +37,15 @@ public class SignalRService : IAsyncDisposable
 
     // ── Bağlantı ─────────────────────────────────────────────────────────────
 
-    public async Task ConnectAsync(CancellationToken ct = default)
-    {
-        if (_connection is not null) return;
+    /// <summary>
+    /// Bağlantıyı başlatır; zaten başlatılmışsa aynı task'ı döner.
+    /// Birden fazla çağırandan güvenle await edilebilir.
+    /// </summary>
+    public Task ConnectAsync(CancellationToken ct = default)
+        => _connectTask ??= DoConnectAsync(ct);
 
+    private async Task DoConnectAsync(CancellationToken ct)
+    {
         _connection = new HubConnectionBuilder()
             .WithUrl(_hubUrl, options =>
             {
@@ -55,7 +67,6 @@ public class SignalRService : IAsyncDisposable
         // Event handler'lar
         _connection.On<object>("ReceiveMetar", payload =>
         {
-            // Payload'dan StationId çek
             var icao = ExtractStationId(payload);
             OnMetarReceived?.Invoke(icao, payload);
         });
@@ -66,7 +77,13 @@ public class SignalRService : IAsyncDisposable
         });
 
         _connection.Reconnecting  += _ => { OnConnectionStateChanged?.Invoke(false); return Task.CompletedTask; };
-        _connection.Reconnected   += _ => { OnConnectionStateChanged?.Invoke(true);  return Task.CompletedTask; };
+        _connection.Reconnected   += async _ =>
+        {
+            OnConnectionStateChanged?.Invoke(true);
+            // Yeniden bağlanınca kullanıcı grubuna da yeniden katıl
+            if (_auth.CurrentUserId is not null)
+                await _connection.InvokeAsync("JoinUserGroupAsync", _auth.CurrentUserId);
+        };
         _connection.Closed        += _ => { OnConnectionStateChanged?.Invoke(false); return Task.CompletedTask; };
 
         try
@@ -81,6 +98,8 @@ public class SignalRService : IAsyncDisposable
         catch
         {
             OnConnectionStateChanged?.Invoke(false);
+            // Task başarısız oldu — bir sonraki ConnectAsync çağrısında tekrar denensin
+            _connectTask = null;
         }
     }
 

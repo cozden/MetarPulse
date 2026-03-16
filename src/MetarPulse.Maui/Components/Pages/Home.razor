@@ -102,20 +102,36 @@ else
     private DateTime? _lastUpdated;
     private CancellationTokenSource _cts = new();
     private System.Timers.Timer? _refreshTimer;
+    private System.Timers.Timer? _ageTimer;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadMetarsAsync();
+        // Cache varsa anında göster (skeleton yok, navigasyon anlık)
+        if (BookmarkState.CachedMetars.Count > 0)
+        {
+            _metars = BookmarkState.CachedMetars;
+            _loading = false;
+        }
 
         // SignalR canlı güncellemeler
         Hub.OnMetarReceived += OnMetarReceived;
+        // Reconnect sonrası istasyon gruplarına yeniden katıl
+        Hub.OnConnectionStateChanged += OnHubConnected;
 
-        // İstasyon gruplarına katıl
-        foreach (var m in _metars)
-            await Hub.JoinStationAsync(m.StationId);
+        // Bağlantıyı başlat (task cache'li — MainLayout zaten başlatmışsa aynı task'ı await eder)
+        await Hub.ConnectAsync();
+        await JoinAllStationsAsync();
+
+        // Arka planda taze veri çek (cache gösteriliyorsa ekranda donma yok)
+        _ = LoadMetarsAsync();
 
         // Bookmark değişince (Settings/Ara'dan ekleme/silme) anında yenile
         BookmarkState.OnChanged += OnBookmarksChanged;
+
+        // 1 dakikada bir "X dk önce" ibaresini güncelle (sadece re-render, API çağrısı yok)
+        _ageTimer = new System.Timers.Timer(TimeSpan.FromMinutes(1));
+        _ageTimer.Elapsed += (_, _) => InvokeAsync(StateHasChanged);
+        _ageTimer.Start();
 
         // 5 dakikada bir otomatik yenile (fallback)
         _refreshTimer = new System.Timers.Timer(TimeSpan.FromMinutes(5));
@@ -128,6 +144,18 @@ else
             });
         };
         _refreshTimer.Start();
+    }
+
+    private void OnHubConnected(bool connected)
+    {
+        if (connected)
+            _ = JoinAllStationsAsync();
+    }
+
+    private async Task JoinAllStationsAsync()
+    {
+        foreach (var m in _metars)
+            await Hub.JoinStationAsync(m.StationId);
     }
 
     private void OnBookmarksChanged()
@@ -154,7 +182,7 @@ else
             _flashingStations.Add(icao);
             StateHasChanged();
 
-            await Task.Delay(5000);
+            await Task.Delay(30_000); // 30sn — bildirim gelince kullanıcı uygulamayı açana kadar flash görünür
             _flashingStations.Remove(icao);
             StateHasChanged();
         });
@@ -162,7 +190,8 @@ else
 
     private async Task LoadMetarsAsync()
     {
-        _loading = true;
+        // Cache varsa skeleton gösterme — arka planda sessizce yenile
+        _loading = _metars.Count == 0;
         _error = null;
 
         try
@@ -173,6 +202,7 @@ else
             var results = await Api.GetBulkMetarAsync(icaos, _cts.Token);
             _metars = results;
             _lastUpdated = DateTime.UtcNow;
+            BookmarkState.SetMetarCache(results); // sonraki navigasyonda anlık gösterim için
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -196,9 +226,11 @@ else
     public void Dispose()
     {
         Hub.OnMetarReceived -= OnMetarReceived;
+        Hub.OnConnectionStateChanged -= OnHubConnected;
         BookmarkState.OnChanged -= OnBookmarksChanged;
         _cts.Cancel();
         _cts.Dispose();
+        _ageTimer?.Dispose();
         _refreshTimer?.Dispose();
     }
 }
