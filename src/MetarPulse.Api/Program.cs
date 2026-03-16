@@ -1,4 +1,7 @@
 using System.Text;
+using FirebaseAdmin;
+using Scalar.AspNetCore;
+using Google.Apis.Auth.OAuth2;
 using MetarPulse.Api.Hubs;
 using MetarPulse.Api.Services;
 using MetarPulse.Infrastructure.Configuration;
@@ -28,6 +31,7 @@ try
     // ─── Controller & OpenAPI ──────────────────────────────────────────────
     builder.Services.AddControllers();
     builder.Services.AddOpenApi();
+
 
     // ─── CORS ──────────────────────────────────────────────────────────────
     builder.Services.AddCors(options =>
@@ -110,14 +114,37 @@ try
     // ─── HttpClient ────────────────────────────────────────────────────────
     builder.Services.AddHttpClient();
 
+    // ─── Firebase Cloud Messaging ──────────────────────────────────────────
+    // Service account JSON yolu: appsettings.json → Firebase:ServiceAccountPath
+    // Dosya: src/MetarPulse.Api/firebase-service-account.json (gitignore'da)
+    var firebaseCredPath = builder.Configuration["Firebase:ServiceAccountPath"];
+    if (!string.IsNullOrWhiteSpace(firebaseCredPath) && File.Exists(firebaseCredPath))
+    {
+        FirebaseApp.Create(new AppOptions
+        {
+            Credential = GoogleCredential.FromFile(firebaseCredPath)
+        });
+        Log.Information("Firebase Admin SDK başlatıldı: {Path}", firebaseCredPath);
+    }
+    else
+    {
+        Log.Warning("Firebase:ServiceAccountPath yapılandırılmamış veya dosya bulunamadı. FCM push devre dışı.");
+    }
+    builder.Services.AddSingleton<FcmService>();
+
     // ─── Arka plan servisleri ──────────────────────────────────────────────
     builder.Services.AddHostedService<MetarPollingService>();
 
     var app = builder.Build();
 
     // ─── Pipeline ──────────────────────────────────────────────────────────
-    if (app.Environment.IsDevelopment())
-        app.MapOpenApi();
+    // OpenAPI + Scalar UI (her ortamda erişilebilir)
+    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.Title = "MetarPulse API";
+        options.WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 
     app.UseSerilogRequestLogging();
     app.UseHttpsRedirection();

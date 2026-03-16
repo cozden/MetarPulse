@@ -16,19 +16,24 @@ public class AirportSyncService : BackgroundService
     private const string AirportsCsvUrl = "https://davidmegginson.github.io/ourairports-data/airports.csv";
     private const string RunwaysCsvUrl = "https://davidmegginson.github.io/ourairports-data/runways.csv";
 
+    // IHttpClientFactory yerine bağımsız HttpClient — IMeterFactory dispose sorununu önler
+    private static readonly HttpClient _http = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5)
+    }) { Timeout = TimeSpan.FromMinutes(8) };
+
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AirportSyncService> _logger;
-    private readonly HttpClient _httpClient;
 
     public AirportSyncService(
         IServiceScopeFactory scopeFactory,
-        ILogger<AirportSyncService> logger,
-        IHttpClientFactory httpClientFactory)
+        ILogger<AirportSyncService> logger)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
-        _httpClient = httpClientFactory.CreateClient("AirportSync");
     }
+
+    private static HttpClient CreateClient() => _http;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -56,7 +61,7 @@ public class AirportSyncService : BackgroundService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var seeder = new AirportDbSeeder(db, _httpClient,
+            var seeder = new AirportDbSeeder(db, CreateClient(),
                 scope.ServiceProvider.GetRequiredService<ILogger<AirportDbSeeder>>());
 
             await seeder.SeedIfEmptyAsync(ct);
@@ -83,7 +88,8 @@ public class AirportSyncService : BackgroundService
     {
         try
         {
-            await using var stream = await _httpClient.GetStreamAsync(AirportsCsvUrl, ct);
+            using var client = CreateClient();
+            await using var stream = await client.GetStreamAsync(AirportsCsvUrl, ct);
             var incoming = OurAirportsCsvParser.ParseAirports(stream)
                 .Where(a => a.MagneticVariation.HasValue)
                 .ToDictionary(a => a.Ident);
@@ -133,7 +139,8 @@ public class AirportSyncService : BackgroundService
 
     private async Task SyncAirportsAsync(AppDbContext db, CancellationToken ct)
     {
-        await using var stream = await _httpClient.GetStreamAsync(AirportsCsvUrl, ct);
+        using var client = CreateClient();
+        await using var stream = await client.GetStreamAsync(AirportsCsvUrl, ct);
         var incoming = OurAirportsCsvParser.ParseAirports(stream).ToDictionary(a => a.Ident);
 
         var existing = await db.Airports
@@ -169,7 +176,8 @@ public class AirportSyncService : BackgroundService
 
     private async Task SyncRunwaysAsync(AppDbContext db, CancellationToken ct)
     {
-        await using var stream = await _httpClient.GetStreamAsync(RunwaysCsvUrl, ct);
+        using var client = CreateClient();
+        await using var stream = await client.GetStreamAsync(RunwaysCsvUrl, ct);
         var incoming = OurAirportsCsvParser.ParseRunways(stream).ToList();
 
         // Var olan tüm pistleri sil ve yeniden ekle (pistler nadiren değişir ama basit yol)

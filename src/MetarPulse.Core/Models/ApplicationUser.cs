@@ -21,4 +21,5 @@ public class ApplicationUser : IdentityUser
     public ICollection<UserBookmark> Bookmarks { get; set; } = new List<UserBookmark>();
     public ICollection<NotificationPreference> NotificationPreferences { get; set; } = new List<NotificationPreference>();
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+    public ICollection<DeviceToken> DeviceTokens { get; set; } = new List<DeviceToken>();
 }

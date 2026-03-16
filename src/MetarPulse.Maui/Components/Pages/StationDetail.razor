@@ -345,6 +345,7 @@ else
     private bool _isBookmarked;
     private string _flashClass = "";
     private CancellationTokenSource _cts = new();
+    private System.Threading.Timer? _ageTimer;
 
     protected override async Task OnInitializedAsync()
     {
@@ -364,6 +365,11 @@ else
             _isBookmarked = icaos.Contains(Icao.ToUpperInvariant(), StringComparer.OrdinalIgnoreCase);
         }
         finally { _loading = false; }
+
+        // "X dk önce" sayacını her 30sn güncelle
+        _ageTimer = new System.Threading.Timer(_ =>
+            InvokeAsync(StateHasChanged), null,
+            TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
 
         await Hub.ConnectAsync(_cts.Token);
         await Hub.JoinStationAsync(Icao);
@@ -453,6 +459,7 @@ else
 
     public async ValueTask DisposeAsync()
     {
+        _ageTimer?.Dispose();
         Hub.OnMetarReceived -= HandleMetarReceived;
         await Hub.LeaveStationAsync(Icao);
         _cts.Cancel();

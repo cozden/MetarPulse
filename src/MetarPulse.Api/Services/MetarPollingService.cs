@@ -50,15 +50,18 @@ public class MetarPollingService : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IHubContext<MetarHub> _hub;
+    private readonly FcmService _fcm;
     private readonly ILogger<MetarPollingService> _logger;
 
     public MetarPollingService(
         IServiceScopeFactory scopeFactory,
         IHubContext<MetarHub> hub,
+        FcmService fcm,
         ILogger<MetarPollingService> logger)
     {
         _scopeFactory = scopeFactory;
         _hub = hub;
+        _fcm = fcm;
         _logger = logger;
     }
 
@@ -220,8 +223,7 @@ public class MetarPollingService : BackgroundService
                         .SendAsync("ReceiveMetar", payload, ct);
 
                     // Bildirim kontrolü — bu istasyonu takip eden kullanıcılar
-                    if (diff != null)
-                        await TriggerNotificationsAsync(db, icao, fresh, diff, ct);
+                    await TriggerNotificationsAsync(db, icao, fresh, diff, ct);
 
                     updated++;
                 }
@@ -242,13 +244,13 @@ public class MetarPollingService : BackgroundService
 
     /// <summary>
     /// NotificationPreference kayıtlarını kontrol et — uygun kullanıcılara
-    /// SignalR "ReceiveAlert" mesajı gönder (kullanıcı grubu: "user_{userId}").
+    /// SignalR "ReceiveAlert" ve FCM push bildirimi gönder.
     /// </summary>
     private async Task TriggerNotificationsAsync(
         AppDbContext db,
         string icao,
         Metar fresh,
-        MetarComparison diff,
+        MetarComparison? diff,
         CancellationToken ct)
     {
         // Bu istasyona ait tüm kullanıcı tercihleri
@@ -274,14 +276,44 @@ public class MetarPollingService : BackgroundService
                 ObservationTime = fresh.ObservationTime.ToString("O")
             };
 
-            // Kullanıcıya özel SignalR grubu
+            // 1) SignalR push — uygulama açıkken anlık güncelleme
             await _hub.Clients
                 .Group(MetarHub.UserGroup(pref.UserId))
                 .SendAsync("ReceiveAlert", alert, ct);
 
+            // 2) FCM push — uygulama kapalıyken arka plan bildirimi
+            var tokens = await db.DeviceTokens
+                .Where(d => d.UserId == pref.UserId)
+                .Select(d => d.Token)
+                .ToListAsync(ct);
+
+            if (tokens.Count > 0)
+            {
+                var title = $"{icao} — {fresh.Category}";
+                var body  = string.Join(" | ", reasons);
+                var data  = new Dictionary<string, string>
+                {
+                    ["icao"]     = icao,
+                    ["category"] = fresh.Category.ToString(),
+                    ["obsTime"]  = fresh.ObservationTime.ToString("O")
+                };
+
+                var invalidTokens = await _fcm.SendMulticastAsync(tokens, title, body, data, ct);
+
+                // Geçersiz token'ları DB'den temizle
+                if (invalidTokens.Count > 0)
+                {
+                    var toRemove = await db.DeviceTokens
+                        .Where(d => invalidTokens.Contains(d.Token))
+                        .ToListAsync(ct);
+                    db.DeviceTokens.RemoveRange(toRemove);
+                    await db.SaveChangesAsync(ct);
+                }
+            }
+
             _logger.LogInformation(
-                "Bildirim gönderildi → UserId:{UserId} | {ICAO} | {Reasons}",
-                pref.UserId, icao, string.Join(", ", reasons));
+                "Bildirim gönderildi → UserId:{UserId} | {ICAO} | {Reasons} | FCM:{FcmCount}",
+                pref.UserId, icao, string.Join(", ", reasons), tokens.Count);
         }
     }
 
@@ -313,22 +345,25 @@ public class MetarPollingService : BackgroundService
     private static List<string> BuildAlertReasons(
         NotificationPreference pref,
         Metar fresh,
-        MetarComparison diff)
+        MetarComparison? diff)
     {
         var reasons = new List<string>();
 
-        if (pref.NotifyOnCategoryChange && diff.CategoryChanged)
-            reasons.Add($"Uçuş kategorisi değişti: {fresh.Category}");
+        if (diff != null)
+        {
+            if (pref.NotifyOnCategoryChange && diff.CategoryChanged)
+                reasons.Add($"Uçuş kategorisi değişti: {fresh.Category}");
+
+            if (pref.NotifyOnVfrAchieved && diff.CategoryChanged
+                && fresh.Category == FlightCategory.VFR)
+                reasons.Add("VFR koşulları sağlandı");
+
+            if (pref.NotifyOnSignificantWeather && diff.SignificantWeatherChanged)
+                reasons.Add("Önemli meteorolojik olay");
+        }
 
         if (pref.NotifyOnSpeci && fresh.IsSpeci)
             reasons.Add("SPECI raporu yayınlandı");
-
-        if (pref.NotifyOnVfrAchieved && diff.CategoryChanged
-            && fresh.Category == FlightCategory.VFR)
-            reasons.Add("VFR koşulları sağlandı");
-
-        if (pref.NotifyOnSignificantWeather && diff.SignificantWeatherChanged)
-            reasons.Add("Önemli meteorolojik olay");
 
         if (pref.WindThresholdKnots.HasValue && fresh.WindSpeed >= pref.WindThresholdKnots)
             reasons.Add($"Rüzgar eşiği aşıldı: {fresh.WindSpeed}kt");

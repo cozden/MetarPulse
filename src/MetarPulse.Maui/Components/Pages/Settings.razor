@@ -185,11 +185,11 @@
                                         <div class="flex items-center gap-1.5">
                                             <input type="time" class="input input-bordered input-xs w-22 tabular-nums text-center"
                                                    value="@pref.StartTime[..5]"
-                                                   @onchange="e => SetPrefTime(pref, true, e.Value?.ToString())" />
+                                                   @oninput="e => SetPrefTime(pref, true, e.Value?.ToString())" />
                                             <span class="text-[0.6rem] text-base-content/40">—</span>
                                             <input type="time" class="input input-bordered input-xs w-22 tabular-nums text-center"
                                                    value="@pref.EndTime[..5]"
-                                                   @onchange="e => SetPrefTime(pref, false, e.Value?.ToString())" />
+                                                   @oninput="e => SetPrefTime(pref, false, e.Value?.ToString())" />
                                         </div>
                                     </div>
 

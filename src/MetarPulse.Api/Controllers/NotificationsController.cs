@@ -72,6 +72,12 @@ public class NotificationsController : ControllerBase
         existing.VisibilityThresholdMeters = req.VisibilityThresholdMeters;
         existing.CeilingThresholdFeet      = req.CeilingThresholdFeet;
 
+        if (req.ActiveDays is not null)
+            existing.ActiveDays = req.ActiveDays.Select(d => (DayOfWeek)d).ToList();
+
+        if (TimeOnly.TryParse(req.StartTime, out var st)) existing.StartTime = st;
+        if (TimeOnly.TryParse(req.EndTime,   out var et)) existing.EndTime   = et;
+
         await _db.SaveChangesAsync(ct);
         return Ok(ToDto(existing));
     }
@@ -100,7 +106,10 @@ public class NotificationsController : ControllerBase
         p.NotifyOnEveryMetar,
         p.WindThresholdKnots,
         p.VisibilityThresholdMeters,
-        p.CeilingThresholdFeet);
+        p.CeilingThresholdFeet,
+        p.ActiveDays.Select(d => (int)d).ToList(),
+        p.StartTime.ToString("HH:mm:ss"),
+        p.EndTime.ToString("HH:mm:ss"));
 }
 
 // ── DTO'lar ───────────────────────────────────────────────────────────────────
@@ -114,7 +123,10 @@ public record NotificationPreferenceDto(
     bool NotifyOnEveryMetar,
     int? WindThresholdKnots,
     int? VisibilityThresholdMeters,
-    int? CeilingThresholdFeet);
+    int? CeilingThresholdFeet,
+    List<int> ActiveDays,
+    string StartTime,
+    string EndTime);
 
 public record NotificationPreferenceRequest(
     string StationIcao,
@@ -125,4 +137,7 @@ public record NotificationPreferenceRequest(
     bool NotifyOnEveryMetar = false,
     int? WindThresholdKnots = null,
     int? VisibilityThresholdMeters = null,
-    int? CeilingThresholdFeet = null);
+    int? CeilingThresholdFeet = null,
+    List<int>? ActiveDays = null,
+    string StartTime = "06:00:00",
+    string EndTime = "22:00:00");

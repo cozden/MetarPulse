@@ -40,6 +40,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<AuthService>(sp =>
         {
             var http = new HttpClient { BaseAddress = new Uri(apiBaseUrl) };
+            // ngrok ücretsiz plan: browser warning sayfasını atla
+            http.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
             return new AuthService(http);
         });
 
@@ -52,6 +54,8 @@ public static class MauiProgram
             client.BaseAddress = new Uri(apiBaseUrl);
             client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Add("Accept", "application/json");
+            // ngrok ücretsiz plan: browser warning sayfasını atla
+            client.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
         }).AddHttpMessageHandler<AuthHeaderHandler>();
 
         // ─── SignalR istemcisi (Singleton) ────────────────────────────────────
@@ -63,6 +67,9 @@ public static class MauiProgram
 
         // ─── Tema yönetimi (Scoped — IJSRuntime Scoped olduğundan) ───────────
         builder.Services.AddScoped<ThemeService>();
+
+        // ─── FCM token kaydı (Singleton) ─────────────────────────────────────
+        builder.Services.AddSingleton<FcmTokenService>();
 
         return builder.Build();
     }

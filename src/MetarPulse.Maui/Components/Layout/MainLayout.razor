@@ -3,6 +3,7 @@
 @inject SignalRService Hub
 @inject NavigationManager Nav
 @inject ThemeService Theme
+@inject FcmTokenService Fcm
 @implements IDisposable
 
 <div class="flex flex-col h-full bg-base-100 text-base-content">
@@ -91,6 +92,10 @@
 
         if (!_connected)
             _ = Hub.ConnectAsync();
+
+        // FCM token'ı her açılışta yenile (login'e bağlı değil, token değişebilir)
+        if (Auth.IsAuthenticated)
+            _ = Fcm.RegisterAsync();
     }
 
     private void OnHubStateChanged(bool connected)

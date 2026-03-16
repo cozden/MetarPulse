@@ -40,6 +40,8 @@ public class SignalRService : IAsyncDisposable
                 // JWT token'ı query string üzerinden gönder (hub policy)
                 options.AccessTokenProvider = async () =>
                     await _auth.GetAccessTokenAsync();
+                // ngrok ücretsiz plan: browser warning sayfasını atla
+                options.Headers["ngrok-skip-browser-warning"] = "true";
             })
             .WithAutomaticReconnect(new[]
             {

@@ -59,3 +59,9 @@ npm-debug.log*
 # ── Logs ──────────────────────────────────────────────────────────────────────
 *.log
 logs/
+
+# ── Firebase ──────────────────────────────────────────────────────────────────
+firebase-service-account.json
+metarpulse-firebase-adminsdk-*.json
+google-services.json
+GoogleService-Info.plist

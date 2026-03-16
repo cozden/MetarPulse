@@ -56,30 +56,53 @@ public class RegionBasedProviderManager : IProviderManager
 
     public async Task<Metar?> GetMetarWithFallbackAsync(string icaoCode, CancellationToken ct = default)
     {
-        var chain = GetWeatherProviderChain(icaoCode);
-        foreach (var provider in chain)
-        {
-            if (IsCircuitOpen(provider.ProviderName)) continue;
+        var chain    = GetWeatherProviderChain(icaoCode);
+        var eligible = chain.Where(p => !IsCircuitOpen(p.ProviderName)).ToList();
 
-            try
-            {
-                var metar = await provider.GetMetarAsync(icaoCode, ct);
-                if (metar != null)
-                {
-                    RecordSuccess(provider.ProviderName);
-                    _logger.LogDebug("{Provider} → {ICAO} METAR başarılı.", provider.ProviderName, icaoCode);
-                    return metar;
-                }
-            }
-            catch (Exception ex)
-            {
-                RecordFailure(provider.ProviderName, ex.Message);
-                _logger.LogWarning("{Provider} → {ICAO} hata: {Msg}", provider.ProviderName, icaoCode, ex.Message);
-            }
+        if (eligible.Count == 0)
+        {
+            _logger.LogError("Tüm provider'lar circuit-open durumunda: {ICAO}", icaoCode);
+            return null;
         }
 
-        _logger.LogError("Tüm provider'lar başarısız: {ICAO}", icaoCode);
-        return null;
+        // Tüm provider'ları paralel sorgula — en güncel ObservationTime'a sahip sonucu al
+        var tasks   = eligible.Select(p => FetchMetarFromProviderAsync(p, icaoCode, ct));
+        var results = await Task.WhenAll(tasks);
+
+        var best = results
+            .Where(r => r != null)
+            .OrderByDescending(r => r!.ObservationTime)
+            .FirstOrDefault();
+
+        if (best == null)
+            _logger.LogError("Tüm provider'lar başarısız: {ICAO}", icaoCode);
+        else
+            _logger.LogDebug("En güncel METAR seçildi: {Provider} → {ICAO} ({ObsTime:HH:mm}Z).",
+                best.SourceProvider, icaoCode, best.ObservationTime);
+
+        return best;
+    }
+
+    private async Task<Metar?> FetchMetarFromProviderAsync(
+        IWeatherProvider provider, string icaoCode, CancellationToken ct)
+    {
+        try
+        {
+            var metar = await provider.GetMetarAsync(icaoCode, ct);
+            if (metar != null)
+            {
+                RecordSuccess(provider.ProviderName);
+                _logger.LogDebug("{Provider} → {ICAO} METAR ({ObsTime:HH:mm}Z).",
+                    provider.ProviderName, icaoCode, metar.ObservationTime);
+            }
+            return metar;
+        }
+        catch (Exception ex)
+        {
+            RecordFailure(provider.ProviderName, ex.Message);
+            _logger.LogWarning("{Provider} → {ICAO} hata: {Msg}", provider.ProviderName, icaoCode, ex.Message);
+            return null;
+        }
     }
 
     public async Task<Taf?> GetTafWithFallbackAsync(string icaoCode, CancellationToken ct = default)

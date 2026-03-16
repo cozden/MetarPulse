@@ -13,7 +13,7 @@
     <h1 class="text-3xl font-bold mb-1">
         Metar<span class="text-primary">Pulse</span>
     </h1>
-    <p class="text-base-content/50 text-sm mb-6">Gerçek zamanlı METAR · TAF · Pist Analizi</p>
+    <p class="text-base-content/70 text-sm mb-6">Gerçek zamanlı METAR · TAF · Pist Analizi</p>
 
     <div class="join max-w-sm mx-auto w-full">
         <input class="input input-bordered join-item flex-1 font-mono uppercase text-center tracking-widest"
@@ -32,7 +32,7 @@
 
 @* ── Popüler istasyonlar ───────────────────────────────────────────────── *@
 <div class="mb-6">
-    <div class="text-xs text-base-content/40 uppercase tracking-wider mb-3">Hızlı Erişim</div>
+    <div class="text-xs text-base-content/60 uppercase tracking-wider mb-3">Hızlı Erişim</div>
     <div class="flex flex-wrap gap-2">
         @foreach (var icao in _popular)
         {
@@ -63,12 +63,12 @@ else if (_metars.Count > 0)
                         <span class="font-mono font-bold text-lg text-base-content tracking-widest">@m.StationId</span>
                         <span class="badge badge-sm @CategoryBadgeClass(m.Category)">@m.Category</span>
                     </div>
-                    <div class="flex items-center gap-4 text-sm text-base-content/70">
+                    <div class="flex items-center gap-4 text-sm text-base-content/85">
                         <span>💨 @m.WindDirection°/@m.WindSpeed kt@(m.WindGust.HasValue ? $" G{m.WindGust}" : "")</span>
                         <span>👁 @VisText(m.VisibilityMeters)</span>
                         <span>☁ @CeilText(m.CeilingFeet)</span>
                     </div>
-                    <div class="text-[0.65rem] font-mono text-base-content/30 mt-1 truncate">@m.RawText</div>
+                    <div class="text-[0.65rem] font-mono text-base-content/50 mt-1 truncate">@m.RawText</div>
                 </div>
             </div>
         }

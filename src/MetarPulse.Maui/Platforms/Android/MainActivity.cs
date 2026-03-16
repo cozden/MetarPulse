@@ -1,8 +1,10 @@
-﻿using Android.App;
+using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
+using Plugin.Firebase.CloudMessaging;
 
 namespace MetarPulse.Maui;
 
@@ -23,5 +25,39 @@ public class MainActivity : MauiAppCompatActivity
                     [Android.Manifest.Permission.PostNotifications], 0);
             }
         }
+
+        // FCM notification channel oluştur
+        CreateNotificationChannel();
+
+        // FCM: uygulama bildirime tıklanarak açılırsa intent'i ilet
+        FirebaseCloudMessagingImplementation.OnNewIntent(Intent);
+    }
+
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        FirebaseCloudMessagingImplementation.OnNewIntent(intent);
+    }
+
+    private void CreateNotificationChannel()
+    {
+        if (Build.VERSION.SdkInt < BuildVersionCodes.O) return;
+
+        // FcmService.cs'deki ChannelId ile aynı olmalı — eşleşmezse bildirim sessizce düşer
+        const string channelId = "metar_alerts";
+        var notificationManager = (NotificationManager?) GetSystemService(NotificationService);
+
+        var channel = new NotificationChannel(
+            channelId,
+            "METAR Bildirimleri",
+            NotificationImportance.High)
+        {
+            Description = "Yeni METAR ve uçuş koşulu değişiklik bildirimleri"
+        };
+
+        notificationManager?.CreateNotificationChannel(channel);
+
+        // Plugin'e channel ID'yi bildir
+        FirebaseCloudMessagingImplementation.ChannelId = channelId;
     }
 }

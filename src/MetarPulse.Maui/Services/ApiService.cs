@@ -225,6 +225,31 @@ public class ApiService
         catch { return []; }
     }
 
+    /// <summary>FCM token'ını API'ye kaydeder (upsert).</summary>
+    public async Task RegisterDeviceTokenAsync(string token, CancellationToken ct = default)
+    {
+        try
+        {
+            await _http.PostAsJsonAsync("api/devices/token",
+                new { Token = token, Platform = "android" }, ct);
+        }
+        catch { /* sessizce geç */ }
+    }
+
+    /// <summary>FCM token'ını API'den siler (logout).</summary>
+    public async Task UnregisterDeviceTokenAsync(string token, CancellationToken ct = default)
+    {
+        try
+        {
+            var req = new HttpRequestMessage(HttpMethod.Delete, "api/devices/token")
+            {
+                Content = JsonContent.Create(new { Token = token })
+            };
+            await _http.SendAsync(req, ct);
+        }
+        catch { /* sessizce geç */ }
+    }
+
     // ── Private DTO records (API contract) ───────────────────────────────────
 
     private record MetarDto(

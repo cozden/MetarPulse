@@ -1,5 +1,6 @@
 @page "/giris"
 @inject AuthService Auth
+@inject FcmTokenService Fcm
 @inject NavigationManager Nav
 
 @* ── Giriş Sayfası — Şifre veya Magic Link *@
@@ -154,7 +155,11 @@
             : await Auth.LoginAsync(_email.Trim(), _password);
 
         _loading = false;
-        if (result.Success) Nav.NavigateTo("/");
+        if (result.Success)
+        {
+            _ = Fcm.RegisterAsync(); // arka planda FCM token kaydet
+            Nav.NavigateTo("/");
+        }
         else _error = result.Error;
     }
 
