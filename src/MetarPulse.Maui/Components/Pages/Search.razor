@@ -2,6 +2,7 @@
 @inject ApiService Api
 @inject AuthService Auth
 @inject NavigationManager Nav
+@inject BookmarkStateService BookmarkState
 
 @* ── Meydan Arama Sayfası ────────────────────────────────────────────────── *@
 
@@ -219,7 +220,11 @@
     {
         if (_result == null || _added) return;
         var ok = await Api.AddBookmarkAsync(_result.StationId);
-        if (ok) _added = true;
+        if (ok)
+        {
+            _added = true;
+            BookmarkState.Add(_result.StationId); // Dashboard + Settings anında güncellenir
+        }
         else _error = "Favorilere eklenemedi. Lütfen tekrar deneyin.";
     }
 

@@ -1,11 +1,13 @@
 using Microsoft.Extensions.Logging;
+#if ANDROID
 using Plugin.Firebase.CloudMessaging;
+#endif
 
 namespace MetarPulse.Maui.Services;
 
 /// <summary>
 /// FCM token'ını alır ve API'ye kaydeder.
-/// Login ve uygulama başlangıcında çağrılır.
+/// Android dışı platformlarda no-op olarak çalışır.
 /// </summary>
 public class FcmTokenService
 {
@@ -24,6 +26,7 @@ public class FcmTokenService
     /// </summary>
     public async Task RegisterAsync(CancellationToken ct = default)
     {
+#if ANDROID
         try
         {
             await CrossFirebaseCloudMessaging.Current.CheckIfValidAsync();
@@ -37,9 +40,11 @@ public class FcmTokenService
         }
         catch (Exception ex)
         {
-            // Hata olursa sessizce geç — push olmaz ama uygulama çalışır
             _logger.LogWarning(ex, "FCM token kaydedilemedi.");
         }
+#else
+        await Task.CompletedTask;
+#endif
     }
 
     /// <summary>
@@ -47,6 +52,7 @@ public class FcmTokenService
     /// </summary>
     public async Task UnregisterAsync(CancellationToken ct = default)
     {
+#if ANDROID
         try
         {
             var token = await CrossFirebaseCloudMessaging.Current.GetTokenAsync();
@@ -57,5 +63,8 @@ public class FcmTokenService
         {
             _logger.LogWarning(ex, "FCM token silinemedi.");
         }
+#else
+        await Task.CompletedTask;
+#endif
     }
 }

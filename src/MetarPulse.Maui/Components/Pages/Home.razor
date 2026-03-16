@@ -1,6 +1,7 @@
 @page "/"
 @inject ApiService Api
 @inject SignalRService Hub
+@inject BookmarkStateService BookmarkState
 @implements IDisposable
 
 @* ── Dashboard — Kaydedilmiş meydanlar ─────────────────────────────────── *@
@@ -113,6 +114,9 @@ else
         foreach (var m in _metars)
             await Hub.JoinStationAsync(m.StationId);
 
+        // Bookmark değişince (Settings/Ara'dan ekleme/silme) anında yenile
+        BookmarkState.OnChanged += OnBookmarksChanged;
+
         // 5 dakikada bir otomatik yenile (fallback)
         _refreshTimer = new System.Timers.Timer(TimeSpan.FromMinutes(5));
         _refreshTimer.Elapsed += async (_, _) =>
@@ -124,6 +128,15 @@ else
             });
         };
         _refreshTimer.Start();
+    }
+
+    private void OnBookmarksChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await LoadMetarsAsync();
+            StateHasChanged();
+        });
     }
 
     private void OnMetarReceived(string icao, object? _payload)
@@ -183,6 +196,7 @@ else
     public void Dispose()
     {
         Hub.OnMetarReceived -= OnMetarReceived;
+        BookmarkState.OnChanged -= OnBookmarksChanged;
         _cts.Cancel();
         _cts.Dispose();
         _refreshTimer?.Dispose();

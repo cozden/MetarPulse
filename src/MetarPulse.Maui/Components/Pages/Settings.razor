@@ -1,6 +1,7 @@
 @page "/ayarlar"
 @inject ApiService Api
 @inject ThemeService Theme
+@inject BookmarkStateService BookmarkState
 
 @* ── Ayarlar Sayfası ────────────────────────────────────────────────────── *@
 
@@ -88,7 +89,7 @@
             else if (_allPrefs.Count == 0 && !_addingNew)
             {
                 <div class="text-xs text-base-content/40 text-center py-3">
-                    Henüz meydan eklenmedi. Yukarıdaki + Meydan butonuna dokun.
+                    Henüz meydan eklenmedi. Ara sekmesinden veya yukaridaki + butonu ile ekleyebilirsiniz.
                 </div>
             }
             else
@@ -202,7 +203,7 @@
                                         </button>
                                         <button class="btn btn-ghost btn-xs text-error"
                                                 @onclick="() => DeletePref(icao)">
-                                            Sil
+                                            Kaldir
                                         </button>
                                     </div>
                                 </div>
@@ -220,17 +221,21 @@
                            placeholder="LTFM"
                            maxlength="4"
                            value="@_newIcao"
-                           @oninput="e => _newIcao = e.Value?.ToString()?.ToUpperInvariant() ?? string.Empty" />
+                           @oninput="e => { _newIcao = e.Value?.ToString()?.ToUpperInvariant() ?? string.Empty; _addError = null; }" />
                     <button class="btn btn-primary btn-sm"
                             disabled="@(_newIcao.Length < 4 || _addingLoading)"
                             @onclick="AddNewStation">
                         @if (_addingLoading) { <span class="loading loading-spinner loading-xs"></span> }
                         else { <span>Ekle</span> }
                     </button>
-                    <button class="btn btn-ghost btn-sm" @onclick="() => _addingNew = false">
+                    <button class="btn btn-ghost btn-sm" @onclick="() => { _addingNew = false; _addError = null; }">
                         Iptal
                     </button>
                 </div>
+                @if (_addError != null)
+                {
+                    <div class="text-xs text-error mt-1">@_addError</div>
+                }
             }
         </div>
     </div>
@@ -304,7 +309,7 @@
                 </div>
                 <div class="flex justify-between">
                     <span>Versiyon</span>
-                    <span class="font-mono text-base-content">1.0.3</span>
+                    <span class="font-mono text-base-content">1.0.5</span>
                 </div>
                 <div class="flex justify-between">
                     <span>Platform</span>
@@ -337,7 +342,23 @@
     {
         _providers = await Api.GetProvidersAsync();
         _prefsLoading = true;
-        _allPrefs = await Api.GetAllNotificationPrefsAsync();
+
+        // Bookmark listesi = tek kaynak. Her bookmark bir bildirim tercihi satırı olarak gösterilir.
+        var bookmarkIcaos = await Api.GetBookmarkIcaosAsync();
+        BookmarkState.Set(bookmarkIcaos); // paylaşılan state'i güncelle
+
+        var existingPrefs = await Api.GetAllNotificationPrefsAsync();
+        var prefMap = existingPrefs.ToDictionary(p => p.StationIcao);
+
+        _allPrefs = bookmarkIcaos.Select(icao =>
+            prefMap.TryGetValue(icao, out var p) ? p : new NotificationPref
+            {
+                StationIcao = icao,
+                StartTime   = "06:00:00",
+                EndTime     = "22:00:00",
+                ActiveDays  = [0, 1, 2, 3, 4, 5, 6]
+            }).ToList();
+
         _prefsLoading = false;
     }
 
@@ -380,6 +401,7 @@
     private bool _addingNew;
     private bool _addingLoading;
     private string _newIcao = string.Empty;
+    private string? _addError;
 
     // (label, DayOfWeek int) — Pzt=1, Sal=2 … Paz=0
     private static readonly (string Label, int Day)[] _days =
@@ -415,22 +437,40 @@
     {
         if (_newIcao.Length < 4) return;
         _addingLoading = true;
+        _addError = null;
         StateHasChanged();
 
-        var existing = await Api.GetNotificationPrefAsync(_newIcao);
-        var pref = existing ?? new NotificationPref
+        // Bookmark'a ekle → Dashboard + Settings her ikisine birden eklenir
+        var ok = await Api.AddBookmarkAsync(_newIcao);
+        if (!ok)
         {
-            StationIcao = _newIcao,
-            StartTime = "06:00:00",
-            EndTime = "22:00:00",
-            ActiveDays = [0, 1, 2, 3, 4, 5, 6]
-        };
+            // Zaten varsa (Conflict 409) sessizce geç; diğer hatalarda uyar
+            var alreadyTracked = _allPrefs.Any(p => p.StationIcao == _newIcao);
+            if (!alreadyTracked)
+            {
+                _addError = $"'{_newIcao}' eklenemedi. ICAO kodu doğru mu?";
+                _addingLoading = false;
+                StateHasChanged();
+                return;
+            }
+        }
 
         if (!_allPrefs.Any(p => p.StationIcao == _newIcao))
+        {
+            var existing = await Api.GetNotificationPrefAsync(_newIcao);
+            var pref = existing ?? new NotificationPref
+            {
+                StationIcao = _newIcao,
+                StartTime   = "06:00:00",
+                EndTime     = "22:00:00",
+                ActiveDays  = [0, 1, 2, 3, 4, 5, 6]
+            };
             _allPrefs.Add(pref);
+        }
 
+        BookmarkState.Add(_newIcao); // Dashboard'a anında bildir
         _expandedIcao = _newIcao;
-        _addingNew = false;
+        _addingNew    = false;
         _addingLoading = false;
         StateHasChanged();
     }
@@ -455,6 +495,8 @@
     private async Task DeletePref(string icao)
     {
         await Api.DeleteNotificationPrefAsync(icao);
+        await Api.RemoveBookmarkAsync(icao);
+        BookmarkState.Remove(icao); // Dashboard'dan anında kaldır
         _allPrefs.RemoveAll(p => p.StationIcao == icao);
         if (_expandedIcao == icao) _expandedIcao = null;
         StateHasChanged();

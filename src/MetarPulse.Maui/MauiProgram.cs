@@ -71,6 +71,9 @@ public static class MauiProgram
         // ─── FCM token kaydı (Singleton) ─────────────────────────────────────
         builder.Services.AddSingleton<FcmTokenService>();
 
+        // ─── Bookmark paylaşılan durum (Singleton) ───────────────────────────
+        builder.Services.AddSingleton<BookmarkStateService>();
+
         return builder.Build();
     }
 }
