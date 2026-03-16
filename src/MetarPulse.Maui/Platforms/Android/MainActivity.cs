@@ -30,13 +30,13 @@ public class MainActivity : MauiAppCompatActivity
         CreateNotificationChannel();
 
         // FCM: uygulama bildirime tıklanarak açılırsa intent'i ilet
-        FirebaseCloudMessagingImplementation.OnNewIntent(Intent);
+        try { FirebaseCloudMessagingImplementation.OnNewIntent(Intent); } catch { }
     }
 
     protected override void OnNewIntent(Intent? intent)
     {
         base.OnNewIntent(intent);
-        FirebaseCloudMessagingImplementation.OnNewIntent(intent);
+        try { FirebaseCloudMessagingImplementation.OnNewIntent(intent); } catch { }
     }
 
     private void CreateNotificationChannel()
@@ -58,6 +58,6 @@ public class MainActivity : MauiAppCompatActivity
         notificationManager?.CreateNotificationChannel(channel);
 
         // Plugin'e channel ID'yi bildir
-        FirebaseCloudMessagingImplementation.ChannelId = channelId;
+        try { FirebaseCloudMessagingImplementation.ChannelId = channelId; } catch { }
     }
 }
