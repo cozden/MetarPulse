@@ -2,6 +2,7 @@
 @inject HttpClient Http
 @inject NavigationManager Nav
 @inject IConfiguration Config
+@inject MetarPulse.Web.Services.ReadStateService ReadState
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.SignalR.Client
 @using System.Text.Json
@@ -56,7 +57,8 @@ else if (_metars.Count > 0)
         @foreach (var m in _metars)
         {
             var flashClass = _flashingStations.Contains(m.StationId) ? $"flash-{m.Category.ToLower()}" : "";
-            <div class="card bg-base-200 border border-base-300 rounded-xl cursor-pointer hover:border-primary/40 transition-colors @flashClass"
+            var readClass  = IsRead(m) ? "opacity-50" : "";
+            <div class="card bg-base-200 border border-base-300 rounded-xl cursor-pointer hover:border-primary/40 transition-colors @flashClass @readClass"
                  @onclick="() => NavigateTo(m.StationId)">
                 <div class="card-body p-3">
                     <div class="flex items-center justify-between mb-2">
@@ -80,6 +82,7 @@ else if (_metars.Count > 0)
     private bool _loading = true;
     private List<MetarDto> _metars = new();
     private readonly HashSet<string> _flashingStations = new();
+    private readonly Dictionary<string, bool> _readStates = new();
     private HubConnection? _hub;
     private System.Threading.Timer? _pollTimer;
 
@@ -88,6 +91,7 @@ else if (_metars.Count > 0)
     protected override async Task OnInitializedAsync()
     {
         await LoadMetarsAsync();
+        await RefreshReadStatesAsync();
         await ConnectSignalRAsync();
 
         // SignalR push yoksa fallback: 5 dakikada bir yenile
@@ -209,6 +213,15 @@ else if (_metars.Count > 0)
     {
         if (e.Key == "Enter") GoToStation();
     }
+
+    private async Task RefreshReadStatesAsync()
+    {
+        foreach (var m in _metars)
+            _readStates[m.StationId] = await ReadState.IsReadAsync(m.StationId, m.ObservationTime);
+    }
+
+    private bool IsRead(MetarDto m) =>
+        _readStates.TryGetValue(m.StationId, out var v) && v;
 
     private static string CategoryBadgeClass(string cat) => cat switch
     {

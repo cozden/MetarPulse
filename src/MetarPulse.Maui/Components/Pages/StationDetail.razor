@@ -2,6 +2,7 @@
 @inject ApiService Api
 @inject NavigationManager Nav
 @inject SignalRService Hub
+@inject ReadStateService ReadState
 @implements IAsyncDisposable
 
 @* ── İstasyon Detay Sayfası ─────────────────────────────────────────────── *@
@@ -373,6 +374,10 @@ else
             _taf         = tafTask.Result;
             var icaos    = icaosTask.Result;
             _isBookmarked = icaos.Contains(Icao.ToUpperInvariant(), StringComparer.OrdinalIgnoreCase);
+
+            // METAR'ı okundu olarak işaretle
+            if (_metar is not null)
+                await ReadState.MarkReadAsync(Icao, _metar.ObservationTime);
         }
         finally { _loading = false; }
 

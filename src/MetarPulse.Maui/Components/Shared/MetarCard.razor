@@ -1,5 +1,5 @@
 @* METAR Kartı — Dashboard ve liste için *@
-<div class="metar-card card bg-base-200 border border-base-300 card-@(Metar.CategoryCssClass) @(Metar.IsStale ? "stale-overlay" : "") @(IsFlashing ? $"flash-{Metar.CategoryCssClass}" : "") fade-in"
+<div class="metar-card card bg-base-200 border border-base-300 card-@(Metar.CategoryCssClass) @(Metar.IsStale ? "stale-overlay" : "") @(IsFlashing ? $"flash-{Metar.CategoryCssClass}" : "") fade-in @(_isRead ? "opacity-50" : "")"
      @onclick="OnClick">
     <div class="card-body p-3 gap-2">
 
@@ -93,13 +93,25 @@
 </div>
 
 @code {
+    [Inject] private ReadStateService ReadState { get; set; } = default!;
+
     [Parameter, EditorRequired] public MetarViewModel Metar { get; set; } = default!;
     [Parameter] public bool ShowRaw { get; set; } = false;
     [Parameter] public bool IsFlashing { get; set; } = false;
     [Parameter] public NotamSummaryViewModel? NotamSummary { get; set; }
     [Parameter] public EventCallback<MetarViewModel> OnCardClick { get; set; }
 
-    private async Task OnClick() => await OnCardClick.InvokeAsync(Metar);
+    private bool _isRead;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isRead = await ReadState.IsReadAsync(Metar.StationId, Metar.ObservationTime);
+    }
+
+    private async Task OnClick()
+    {
+        await OnCardClick.InvokeAsync(Metar);
+    }
 
     private string VisibilityColor => Metar.VisibilityMeters switch
     {

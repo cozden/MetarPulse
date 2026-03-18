@@ -28,7 +28,15 @@ html, body {
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
+    font-weight: 500;
 }
+
+/* Gün ışığı okunabilirliği — düşük opacity text'leri yükselt */
+.text-base-content\/40 { color: oklch(var(--bc) / 0.65) !important; }
+.text-base-content\/50 { color: oklch(var(--bc) / 0.70) !important; }
+.text-base-content\/60 { color: oklch(var(--bc) / 0.75) !important; }
+.text-base-content\/70 { color: oklch(var(--bc) / 0.82) !important; }
+.text-base-content\/85 { color: oklch(var(--bc) / 0.92) !important; }
 
 #app {
     height: 100%;

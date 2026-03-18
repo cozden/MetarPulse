@@ -2,6 +2,7 @@
 @inject HttpClient Http
 @inject NavigationManager Nav
 @inject IConfiguration Config
+@inject MetarPulse.Web.Services.ReadStateService ReadState
 @implements IAsyncDisposable
 @using Microsoft.AspNetCore.SignalR.Client
 @using System.Text.Json
@@ -347,6 +348,9 @@ else
             _metar  = metarTask.Result;
             _runway = runwayTask.Result;
             _taf    = tafTask.Result;
+
+            if (_metar is not null)
+                await ReadState.MarkReadAsync(Icao, _metar.ObservationTime);
         }
         catch { }
         finally { _loading = false; }

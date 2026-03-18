@@ -74,6 +74,9 @@ public static class MauiProgram
         // ─── Bookmark paylaşılan durum (Singleton) ───────────────────────────
         builder.Services.AddSingleton<BookmarkStateService>();
 
+        // ─── METAR okunma durumu (Scoped — IJSRuntime'a bağlı) ───────────────
+        builder.Services.AddScoped<ReadStateService>();
+
         return builder.Build();
     }
 }
