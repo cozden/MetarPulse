@@ -132,12 +132,19 @@ public class MetarPollingService : BackgroundService
             "MetarPollingService başlatıldı (döngü: {S}sn, sıcak pencere: :20+{W}dk / :50+{W}dk).",
             CheckInterval.TotalSeconds, HotWindowMinutes, HotWindowMinutes);
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            await Task.Delay(CheckInterval, stoppingToken);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(CheckInterval, stoppingToken);
 
-            if (!stoppingToken.IsCancellationRequested)
-                await PollAllTrackedStationsAsync(stoppingToken);
+                if (!stoppingToken.IsCancellationRequested)
+                    await PollAllTrackedStationsAsync(stoppingToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal shutdown, ignore
         }
     }
 
@@ -291,6 +298,21 @@ public class MetarPollingService : BackgroundService
             {
                 var title = $"{icao} — {fresh.Category}";
                 var body  = string.Join(" | ", reasons);
+
+                // MVFR/IFR/LIFR durumunda görüş ve tavan bilgisi ekle
+                if (fresh.Category != FlightCategory.VFR)
+                {
+                    var extras = new List<string>();
+                    if (fresh.VisibilityMeters > 0)
+                        extras.Add($"VIS {fresh.VisibilityMeters}m");
+                    if (fresh.CeilingFeet > 0)
+                        extras.Add($"Tavan {fresh.CeilingFeet}ft");
+                    if (extras.Count > 0)
+                        body = string.IsNullOrEmpty(body)
+                            ? string.Join(" | ", extras)
+                            : $"{body} | {string.Join(" | ", extras)}";
+                }
+
                 var data  = new Dictionary<string, string>
                 {
                     ["icao"]     = icao,

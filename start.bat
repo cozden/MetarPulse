@@ -83,10 +83,22 @@ echo Waiting for services to be healthy...
 timeout /t 10 /nobreak >NUL
 
 echo.
+echo [ngrok] Starting ngrok tunnel (port 5000)...
+where ngrok >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo WARNING: ngrok not found in PATH. Skipping tunnel.
+    echo          Install: winget install ngrok.ngrok
+) else (
+    start "MetarPulse ngrok" cmd /k "ngrok http --domain=gulflike-yosef-unsequenced.ngrok-free.dev 5000"
+    echo ngrok started: https://gulflike-yosef-unsequenced.ngrok-free.dev
+)
+
+echo.
 echo ==========================================
 echo  PostgreSQL : localhost:5432
 echo  API        : http://localhost:5000
 echo  Web        : http://localhost:8080
+echo  ngrok      : https://gulflike-yosef-unsequenced.ngrok-free.dev
 echo.
 echo Durdurmak icin stop.bat calistirin.
 echo Log gormek icin: docker compose logs -f

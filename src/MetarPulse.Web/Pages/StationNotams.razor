@@ -1,8 +1,8 @@
 @page "/istasyon/{Icao}/notam"
-@inject ApiService Api
-@implements IDisposable
+@inject HttpClient Http
+@inject NavigationManager Nav
 
-@* ── NOTAM Listesi ───────────────────────────────────────────────────────── *@
+<PageTitle>@Icao NOTAM — MetarPulse</PageTitle>
 
 @* ── Başlık ──────────────────────────────────────────────────────────────── *@
 <div class="flex items-center justify-between mb-3">
@@ -34,23 +34,18 @@
 
 @* ── Filtreler ────────────────────────────────────────────────────────────── *@
 <div class="flex gap-2 mb-3 flex-wrap">
-    <button class="btn btn-xs @(_filter == "all"     ? "btn-primary" : "btn-ghost")" @onclick='() => SetFilter("all")'>Tümü (@_notams.Count)</button>
-    <button class="btn btn-xs @(_filter == "Warning" ? "btn-error"   : "btn-ghost")" @onclick='() => SetFilter("Warning")'>Uyarı (@_notams.Count(n => n.VfrImpact == "Warning"))</button>
-    <button class="btn btn-xs @(_filter == "Caution" ? "btn-warning" : "btn-ghost")" @onclick='() => SetFilter("Caution")'>Dikkat (@_notams.Count(n => n.VfrImpact == "Caution"))</button>
-    <button class="btn btn-xs @(_filter == "Advisory"? "btn-info"    : "btn-ghost")" @onclick='() => SetFilter("Advisory")'>Bilgi (@_notams.Count(n => n.VfrImpact == "Advisory"))</button>
+    <button class="btn btn-xs @(_filter == "all"      ? "btn-primary" : "btn-ghost")" @onclick='() => SetFilter("all")'>Tümü (@_notams.Count)</button>
+    <button class="btn btn-xs @(_filter == "Warning"  ? "btn-error"   : "btn-ghost")" @onclick='() => SetFilter("Warning")'>Uyarı (@_notams.Count(n => n.VfrImpact == "Warning"))</button>
+    <button class="btn btn-xs @(_filter == "Caution"  ? "btn-warning" : "btn-ghost")" @onclick='() => SetFilter("Caution")'>Dikkat (@_notams.Count(n => n.VfrImpact == "Caution"))</button>
+    <button class="btn btn-xs @(_filter == "Advisory" ? "btn-info"    : "btn-ghost")" @onclick='() => SetFilter("Advisory")'>Bilgi (@_notams.Count(n => n.VfrImpact == "Advisory"))</button>
 </div>
 
 @* ── İçerik ───────────────────────────────────────────────────────────────── *@
 @if (_loading && _notams.Count == 0)
 {
-    @for (int i = 0; i < 3; i++)
-    {
-        <div class="card bg-base-200 border border-base-300 rounded-xl p-3 mb-3">
-            <div class="skeleton-line h-4 w-24 mb-2 rounded"></div>
-            <div class="skeleton-line h-3 w-full rounded mb-1"></div>
-            <div class="skeleton-line h-3 w-3/4 rounded"></div>
-        </div>
-    }
+    <div class="flex justify-center py-12">
+        <span class="loading loading-ring loading-lg text-primary"></span>
+    </div>
 }
 else if (Filtered.Count == 0 && !_loading)
 {
@@ -68,11 +63,10 @@ else
         @foreach (var notam in Filtered)
         {
             <div class="card bg-base-200 border border-base-300 rounded-xl overflow-hidden card-@notam.VfrImpact.ToLower()">
-                @* Başlık satırı *@
                 <button class="w-full text-left p-3" @onclick="() => Toggle(notam.NotamId)">
                     <div class="flex items-start justify-between gap-2">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <span class="badge badge-sm @notam.ImpactBadgeCss font-mono">@notam.VfrImpact</span>
+                            <span class="badge badge-sm @ImpactBadgeCss(notam.VfrImpact) font-mono">@notam.VfrImpact</span>
                             @if (notam.Traffic is "Vfr" or "All")
                             {
                                 <span class="badge badge-xs badge-traffic-vfr font-mono">VFR</span>
@@ -92,14 +86,13 @@ else
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
                     </div>
-                    <p class="text-xs text-base-content/40 mt-1">@notam.ValidityText</p>
+                    <p class="text-xs text-base-content/40 mt-1">@ValidityText(notam)</p>
                     @if (!_expanded.Contains(notam.NotamId))
                     {
                         <p class="text-xs text-base-content/60 mt-1 line-clamp-2">@notam.RawText</p>
                     }
                 </button>
 
-                @* Genişletilmiş içerik *@
                 @if (_expanded.Contains(notam.NotamId))
                 {
                     <div class="border-t border-base-300 px-3 pb-3 pt-2">
@@ -130,36 +123,30 @@ else
 
 @code {
     [Parameter] public string Icao { get; set; } = string.Empty;
-    [Inject] private NavigationManager Nav { get; set; } = default!;
 
-    private List<NotamViewModel> _notams = new();
+    private List<NotamDto> _notams = new();
     private readonly HashSet<string> _expanded = new();
     private bool _loading;
     private string _filter = "all";
-    private CancellationTokenSource _cts = new();
 
-    private List<NotamViewModel> Filtered =>
+    private List<NotamDto> Filtered =>
         _filter == "all" ? _notams : _notams.Where(n => n.VfrImpact == _filter).ToList();
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnParametersSetAsync()
     {
-        if (!firstRender) return;
         await LoadAsync();
-        StateHasChanged();
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        StateHasChanged();
         try
         {
-            _notams = await Api.GetNotamsAsync(Icao, _cts.Token);
+            var result = await Http.GetFromJsonAsync<List<NotamDto>>($"api/notam/{Icao.ToUpperInvariant()}");
+            _notams = result ?? [];
         }
-        finally
-        {
-            _loading = false;
-        }
+        catch { _notams = []; }
+        finally { _loading = false; }
     }
 
     private void Toggle(string notamId)
@@ -168,16 +155,40 @@ else
             _expanded.Remove(notamId);
     }
 
-    private void SetFilter(string filter)
-    {
-        _filter = filter;
-    }
+    private void SetFilter(string filter) => _filter = filter;
 
     private void GoBack() => Nav.NavigateTo($"/istasyon/{Icao}");
 
-    public void Dispose()
+    private static string ImpactBadgeCss(string impact) => impact switch
     {
-        _cts.Cancel();
-        _cts.Dispose();
+        "Warning"  => "badge-error",
+        "Caution"  => "badge-warning",
+        "Advisory" => "badge-info",
+        _          => "badge-ghost"
+    };
+
+    private static string ValidityText(NotamDto n)
+    {
+        if (n.IsPermanent) return "PERM";
+        var from = n.EffectiveFrom.ToUniversalTime().ToString("ddHHmm");
+        var to = n.EffectiveTo?.ToUniversalTime().ToString("ddHHmm") ?? "PERM";
+        return $"{from}Z – {to}Z";
     }
+
+    private record NotamDto(
+        string NotamId,
+        string AirportIdent,
+        string Subject,
+        string Traffic,
+        string Scope,
+        string VfrImpact,
+        DateTime EffectiveFrom,
+        DateTime? EffectiveTo,
+        bool IsPermanent,
+        string? Schedule,
+        string LowerLimit,
+        string UpperLimit,
+        string RawText,
+        string SourceProvider
+    );
 }

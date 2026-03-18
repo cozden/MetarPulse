@@ -135,7 +135,7 @@ try
     builder.Services.AddSingleton<FcmService>();
 
     // ─── NOTAM Provider ────────────────────────────────────────────────────
-    builder.Services.AddSingleton<INotamProvider, AviationWeatherNotamProvider>();
+    builder.Services.AddSingleton<INotamProvider, FaaNotamSearchProvider>();
 
     // ─── Arka plan servisleri ──────────────────────────────────────────────
     builder.Services.AddHostedService<MetarPollingService>();

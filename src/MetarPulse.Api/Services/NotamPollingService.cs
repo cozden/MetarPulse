@@ -37,13 +37,20 @@ public class NotamPollingService : BackgroundService
     {
         _logger.LogInformation("NotamPollingService başlatıldı (aralık: {Min} dk).", PollInterval.TotalMinutes);
 
-        // İlk çalıştırma — 2 dk bekle (API başlayana kadar)
-        await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
-
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            await PollAsync(stoppingToken);
-            await Task.Delay(PollInterval, stoppingToken);
+            // İlk çalıştırma — 2 dk bekle (API başlayana kadar)
+            await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await PollAsync(stoppingToken);
+                await Task.Delay(PollInterval, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Normal shutdown, ignore
         }
     }
 
