@@ -18,6 +18,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Metar> MetarHistory => Set<Metar>();
     public DbSet<Taf> TafHistory => Set<Taf>();
 
+    // NOTAM verileri
+    public DbSet<Notam> Notams => Set<Notam>();
+
     // Kullanıcı verileri
     public DbSet<PilotProfile> PilotProfiles => Set<PilotProfile>();
     public DbSet<UserBookmark> UserBookmarks => Set<UserBookmark>();

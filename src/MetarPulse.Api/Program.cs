@@ -2,10 +2,12 @@ using System.Text;
 using FirebaseAdmin;
 using Scalar.AspNetCore;
 using Google.Apis.Auth.OAuth2;
+using MetarPulse.Abstractions.Providers;
 using MetarPulse.Api.Hubs;
 using MetarPulse.Api.Services;
 using MetarPulse.Infrastructure.Configuration;
 using MetarPulse.Infrastructure.Persistence.PostgreSQL;
+using MetarPulse.Infrastructure.Providers.Notam;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -132,8 +134,12 @@ try
     }
     builder.Services.AddSingleton<FcmService>();
 
+    // ─── NOTAM Provider ────────────────────────────────────────────────────
+    builder.Services.AddSingleton<INotamProvider, AviationWeatherNotamProvider>();
+
     // ─── Arka plan servisleri ──────────────────────────────────────────────
     builder.Services.AddHostedService<MetarPollingService>();
+    builder.Services.AddHostedService<NotamPollingService>();
 
     var app = builder.Build();
 

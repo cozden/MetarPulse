@@ -211,6 +211,56 @@ public class ApiService
         catch { return false; }
     }
 
+    // ── NOTAM ─────────────────────────────────────────────────────────────────
+
+    public async Task<List<NotamViewModel>> GetNotamsAsync(string icao, CancellationToken ct = default)
+    {
+        try
+        {
+            var dtos = await _http.GetFromJsonAsync<List<NotamDto>>(
+                $"api/notam/{icao.ToUpperInvariant()}", ct);
+            return dtos?.Select(MapNotam).ToList() ?? [];
+        }
+        catch { return []; }
+    }
+
+    public async Task<List<NotamSummaryViewModel>> GetBulkNotamSummaryAsync(
+        IEnumerable<string> icaoCodes, CancellationToken ct = default)
+    {
+        try
+        {
+            var joined = string.Join(",", icaoCodes.Select(c => c.ToUpperInvariant()));
+            var dtos = await _http.GetFromJsonAsync<List<NotamSummaryDto>>(
+                $"api/notam/bulk?icaos={joined}", ct);
+            return dtos?.Select(d => new NotamSummaryViewModel
+            {
+                AirportIdent  = d.AirportIdent,
+                ActiveCount   = d.ActiveCount,
+                HasVfrWarning = d.HasVfrWarning,
+                HasVfrCaution = d.HasVfrCaution
+            }).ToList() ?? [];
+        }
+        catch { return []; }
+    }
+
+    private static NotamViewModel MapNotam(NotamDto d) => new()
+    {
+        NotamId        = d.NotamId,
+        AirportIdent   = d.AirportIdent,
+        Subject        = d.Subject,
+        Traffic        = d.Traffic,
+        Scope          = d.Scope,
+        VfrImpact      = d.VfrImpact,
+        EffectiveFrom  = d.EffectiveFrom,
+        EffectiveTo    = d.EffectiveTo,
+        IsPermanent    = d.IsPermanent,
+        Schedule       = d.Schedule,
+        LowerLimit     = d.LowerLimit,
+        UpperLimit     = d.UpperLimit,
+        RawText        = d.RawText,
+        SourceProvider = d.SourceProvider
+    };
+
     // ── Airport search ────────────────────────────────────────────────────────
 
     public async Task<List<AirportSearchResult>> SearchAirportsAsync(string query, CancellationToken ct = default)
@@ -251,6 +301,30 @@ public class ApiService
     }
 
     // ── Private DTO records (API contract) ───────────────────────────────────
+
+    private record NotamDto(
+        string NotamId,
+        string AirportIdent,
+        string Subject,
+        string Traffic,
+        string Scope,
+        string VfrImpact,
+        DateTime EffectiveFrom,
+        DateTime? EffectiveTo,
+        bool IsPermanent,
+        string? Schedule,
+        string LowerLimit,
+        string UpperLimit,
+        string RawText,
+        string SourceProvider
+    );
+
+    private record NotamSummaryDto(
+        string AirportIdent,
+        int ActiveCount,
+        bool HasVfrWarning,
+        bool HasVfrCaution
+    );
 
     private record MetarDto(
         string StationId,

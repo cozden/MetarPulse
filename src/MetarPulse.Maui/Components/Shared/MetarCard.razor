@@ -17,6 +17,10 @@
                 {
                     <span class="badge badge-ghost badge-xs opacity-60">BAYAT</span>
                 }
+                @if (NotamSummary is not null && NotamSummary.HasAny)
+                {
+                    <span class="badge badge-xs @NotamSummary.BadgeCss" title="NOTAM">N @NotamSummary.ActiveCount</span>
+                }
             </div>
             <div class="flex items-center gap-2">
                 <FlightCategoryBadge Category="@Metar.Category" />
@@ -92,6 +96,7 @@
     [Parameter, EditorRequired] public MetarViewModel Metar { get; set; } = default!;
     [Parameter] public bool ShowRaw { get; set; } = false;
     [Parameter] public bool IsFlashing { get; set; } = false;
+    [Parameter] public NotamSummaryViewModel? NotamSummary { get; set; }
     [Parameter] public EventCallback<MetarViewModel> OnCardClick { get; set; }
 
     private async Task OnClick() => await OnCardClick.InvokeAsync(Metar);
