@@ -104,46 +104,43 @@ else
     private System.Timers.Timer? _refreshTimer;
     private System.Timers.Timer? _ageTimer;
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
         // Cache varsa anında göster (skeleton yok, navigasyon anlık)
         if (BookmarkState.CachedMetars.Count > 0)
-        {
             _metars = BookmarkState.CachedMetars;
-            _loading = false;
-        }
 
-        // SignalR canlı güncellemeler
         Hub.OnMetarReceived += OnMetarReceived;
-        // Reconnect sonrası istasyon gruplarına yeniden katıl
         Hub.OnConnectionStateChanged += OnHubConnected;
-
-        // Bağlantıyı başlat (task cache'li — MainLayout zaten başlatmışsa aynı task'ı await eder)
-        await Hub.ConnectAsync();
-        await JoinAllStationsAsync();
-
-        // Arka planda taze veri çek (cache gösteriliyorsa ekranda donma yok)
-        _ = LoadMetarsAsync();
-
-        // Bookmark değişince (Settings/Ara'dan ekleme/silme) anında yenile
         BookmarkState.OnChanged += OnBookmarksChanged;
 
-        // 1 dakikada bir "X dk önce" ibaresini güncelle (sadece re-render, API çağrısı yok)
+        // 1 dakikada bir "X dk önce" ibaresini güncelle
         _ageTimer = new System.Timers.Timer(TimeSpan.FromMinutes(1));
         _ageTimer.Elapsed += (_, _) => InvokeAsync(StateHasChanged);
         _ageTimer.Start();
 
         // 5 dakikada bir otomatik yenile (fallback)
         _refreshTimer = new System.Timers.Timer(TimeSpan.FromMinutes(5));
-        _refreshTimer.Elapsed += async (_, _) =>
+        _refreshTimer.Elapsed += async (_, _) => await InvokeAsync(async () =>
         {
-            await InvokeAsync(async () =>
-            {
-                await LoadMetarsAsync();
-                StateHasChanged();
-            });
-        };
+            await LoadMetarsAsync();
+            StateHasChanged();
+        });
         _refreshTimer.Start();
+
+        // SignalR bağlantısını arka planda başlat — UI'ı bloklamıyor
+        _ = Hub.ConnectAsync();
+
+        return Task.CompletedTask; // sync dön → component anında render edilir
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // İlk render sonrası veri yükle — Blazor garantili lifecycle, tüm platformlarda çalışır
+        await LoadMetarsAsync();
+        StateHasChanged();
+        await JoinAllStationsAsync();
     }
 
     private void OnHubConnected(bool connected)

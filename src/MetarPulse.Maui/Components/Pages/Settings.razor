@@ -240,64 +240,6 @@
         </div>
     </div>
 
-    @* Sağlayıcılar *@
-    <div class="card bg-base-200 border border-base-300 rounded-xl">
-        <div class="card-body p-4">
-            <div class="flex items-center justify-between mb-1">
-                <h2 class="text-sm font-semibold text-base-content">Sağlayıcılar</h2>
-                @if (_providerSaving)
-                {
-                    <span class="loading loading-spinner loading-xs text-primary"></span>
-                }
-                @if (_providerSaved)
-                {
-                    <span class="text-xs text-success">Kaydedildi</span>
-                }
-            </div>
-            <div class="text-xs text-base-content/40 mb-3">Sürükleyerek öncelik sırası belirleyin.</div>
-
-            @if (_providers.Count == 0)
-            {
-                <div class="text-xs text-base-content/40">Yükleniyor...</div>
-            }
-            else
-            {
-                <div class="flex flex-col gap-1.5">
-                    @for (int i = 0; i < _providers.Count; i++)
-                    {
-                        var idx = i;
-                        var p = _providers[idx];
-                        <div class="flex items-center gap-2 p-2.5 rounded-lg bg-base-100 border border-base-300 @(!p.IsEnabled ? "opacity-50" : "")">
-                            <div class="flex flex-col gap-0.5">
-                                <button class="btn btn-ghost btn-xs px-1 py-0 min-h-0 h-4 leading-none disabled:opacity-20"
-                                        disabled="@(idx == 0)"
-                                        @onclick="() => MoveProvider(idx, -1)">&#9650;</button>
-                                <button class="btn btn-ghost btn-xs px-1 py-0 min-h-0 h-4 leading-none disabled:opacity-20"
-                                        disabled="@(idx == _providers.Count - 1)"
-                                        @onclick="() => MoveProvider(idx, 1)">&#9660;</button>
-                            </div>
-                            <span class="w-4 text-center text-xs text-base-content/30 tabular-nums">@(idx + 1)</span>
-                            <span class="flex-1 text-xs font-mono font-semibold text-base-content">@p.ProviderName</span>
-                            @if (p.IsEnabled)
-                            {
-                                <span class="badge badge-xs @(p.IsHealthy ? "badge-success" : "badge-warning")">
-                                    @(p.IsHealthy ? "OK" : "Hata")
-                                </span>
-                            }
-                            <input type="checkbox" class="toggle toggle-primary toggle-xs"
-                                   checked="@p.IsEnabled"
-                                   @onchange="e => p.IsEnabled = (bool)(e.Value ?? false)" />
-                        </div>
-                    }
-                </div>
-
-                <button class="btn btn-primary btn-sm w-full mt-3" @onclick="SaveProviders">
-                    Kaydet
-                </button>
-            }
-        </div>
-    </div>
-
     @* Uygulama hakkında *@
     <div class="card bg-base-200 border border-base-300 rounded-xl">
         <div class="card-body p-4">
@@ -309,7 +251,7 @@
                 </div>
                 <div class="flex justify-between">
                     <span>Versiyon</span>
-                    <span class="font-mono text-base-content">1.0.5</span>
+                    <span class="font-mono text-base-content">1.0.7</span>
                 </div>
                 <div class="flex justify-between">
                     <span>Platform</span>
@@ -332,15 +274,8 @@
         StateHasChanged();
     }
 
-    // ── Providers ─────────────────────────────────────────────────────────────
-
-    private List<ProviderInfo> _providers = [];
-    private bool _providerSaving;
-    private bool _providerSaved;
-
     protected override async Task OnInitializedAsync()
     {
-        _providers = await Api.GetProvidersAsync();
         _prefsLoading = true;
 
         // Bookmark listesi = tek kaynak. Her bookmark bir bildirim tercihi satırı olarak gösterilir.
@@ -360,34 +295,6 @@
             }).ToList();
 
         _prefsLoading = false;
-    }
-
-    private void MoveProvider(int idx, int direction)
-    {
-        var newIdx = idx + direction;
-        if (newIdx < 0 || newIdx >= _providers.Count) return;
-        var item = _providers[idx];
-        _providers.RemoveAt(idx);
-        _providers.Insert(newIdx, item);
-    }
-
-    private async Task SaveProviders()
-    {
-        _providerSaving = true;
-        _providerSaved  = false;
-
-        foreach (var p in _providers)
-            await Api.SetProviderEnabledAsync(p.ProviderName, p.IsEnabled);
-
-        var ordered  = _providers.Where(p => p.IsEnabled).Select(p => p.ProviderName).ToList();
-        var global   = ordered.Where(n => n != "MGM_RASAT").ToList();
-        var turkey   = ordered.ToList();
-        await Api.ReorderProvidersAsync(global, turkey);
-
-        _providerSaving = false;
-        _providerSaved  = true;
-        await Task.Delay(2000);
-        _providerSaved  = false;
     }
 
     // ── Notifications ─────────────────────────────────────────────────────────
