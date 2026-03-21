@@ -158,6 +158,7 @@ try
     // ─── Arka plan servisleri ──────────────────────────────────────────────
     builder.Services.AddHostedService<MetarPollingService>();
     builder.Services.AddHostedService<NotamPollingService>();
+    builder.Services.AddHostedService<WeatherDataCleanupService>();
 
     var app = builder.Build();
 
