@@ -31,7 +31,7 @@ public static class MauiProgram
         // TODO: ngrok URL'ini buraya yaz → ngrok http 5000 komutunun çıktısından al
         var apiBaseUrl = "https://gulflike-yosef-unsequenced.ngrok-free.dev";
 #else
-        var apiBaseUrl = "https://api.metarpulse.senindomain.com/";
+        var apiBaseUrl = "https://gulflike-yosef-unsequenced.ngrok-free.dev";
 #endif
 
         var hubUrl = $"{apiBaseUrl.TrimEnd('/')}/hubs/metar";

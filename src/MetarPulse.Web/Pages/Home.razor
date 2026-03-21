@@ -232,7 +232,7 @@ else if (_metars.Count > 0)
         _      => "badge-ghost"
     };
 
-    private static string VisText(int m) => m >= 9999 ? "9999m" : $"{m}m";
+    private static string VisText(int m) => m >= 9999 ? "10km+" : $"{m}m";
     private static string CeilText(int ft) => ft >= 9999 ? "CLR" : $"{ft:N0}ft";
 
     public async ValueTask DisposeAsync()

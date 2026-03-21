@@ -32,15 +32,15 @@ public static class ProviderRegistration
         services.AddHttpClient("AirportSync", client =>
             client.Timeout = TimeSpan.FromMinutes(5));
 
-        // Weather Provider'lar — IEnumerable<IWeatherProvider> üzerinden inject edilir
-        services.AddScoped<IWeatherProvider, MgmRasatWeatherProvider>();
-        services.AddScoped<IWeatherProvider, AvwxWeatherProvider>();
-        services.AddScoped<IWeatherProvider, CheckWxWeatherProvider>();
-        services.AddScoped<IWeatherProvider, AwcWeatherProvider>();
-        services.AddScoped<IWeatherProvider, NoaaTgftpWeatherProvider>();
+        // Weather Provider'lar — Singleton: enable/disable state değişiklikleri tüm scope'larda anında geçerli
+        services.AddSingleton<IWeatherProvider, MgmRasatWeatherProvider>();
+        services.AddSingleton<IWeatherProvider, AvwxWeatherProvider>();
+        services.AddSingleton<IWeatherProvider, CheckWxWeatherProvider>();
+        services.AddSingleton<IWeatherProvider, AwcWeatherProvider>();
+        services.AddSingleton<IWeatherProvider, NoaaTgftpWeatherProvider>();
 
-        // Provider Manager — bölge bazlı routing + fallback zinciri
-        services.AddScoped<IProviderManager, RegionBasedProviderManager>();
+        // Provider Manager — Singleton: provider chain her zaman güncel state'i yansıtır
+        services.AddSingleton<IProviderManager, RegionBasedProviderManager>();
 
         return services;
     }

@@ -258,7 +258,7 @@ else
                                 {
                                     <span class="tabular-nums">
                                         <span class="text-base-content/40">VIS</span>
-                                        @(p.VisibilityMeters >= 9999 ? "9999m" : $"{p.VisibilityMeters}m")
+                                        @(p.VisibilityMeters >= 9999 ? "10km+" : $"{p.VisibilityMeters}m")
                                     </span>
                                 }
                                 @foreach (var wx in p.WeatherConditions)

@@ -13,7 +13,6 @@ namespace MetarPulse.Infrastructure.Providers.Weather;
 public class RegionBasedProviderManager : IProviderManager
 {
     private readonly IReadOnlyList<IWeatherProvider> _providers;
-    private readonly IAirportDataProvider _airportProvider;
     private readonly WeatherProviderSettings _settings;
     private readonly ILogger<RegionBasedProviderManager> _logger;
     private readonly Dictionary<string, ProviderHealthStatus> _healthStatuses;
@@ -21,12 +20,10 @@ public class RegionBasedProviderManager : IProviderManager
 
     public RegionBasedProviderManager(
         IEnumerable<IWeatherProvider> providers,
-        IAirportDataProvider airportProvider,
         IOptions<WeatherProviderSettings> settings,
         ILogger<RegionBasedProviderManager> logger)
     {
         _providers = providers.OrderBy(p => p.Priority).ToList().AsReadOnly();
-        _airportProvider = airportProvider;
         _settings = settings.Value;
         _logger = logger;
         _healthStatuses = _providers.ToDictionary(
@@ -52,7 +49,8 @@ public class RegionBasedProviderManager : IProviderManager
             .AsReadOnly();
     }
 
-    public IAirportDataProvider GetActiveAirportProvider() => _airportProvider;
+    public IAirportDataProvider GetActiveAirportProvider()
+        => throw new NotSupportedException("Airport provider, IProviderManager üzerinden değil IAirportDataProvider üzerinden inject edilmeli.");
 
     public async Task<Metar?> GetMetarWithFallbackAsync(string icaoCode, CancellationToken ct = default)
     {

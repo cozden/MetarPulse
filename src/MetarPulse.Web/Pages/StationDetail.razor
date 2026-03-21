@@ -110,7 +110,7 @@ else
             <div class="card-body p-4">
                 <div class="text-xs text-base-content/60 uppercase tracking-wider mb-1">Görüş</div>
                 <span class="text-3xl font-bold tabular-nums @VisColor">
-                    @(_metar.VisibilityMeters >= 9999 ? "9999m" : $"{_metar.VisibilityMeters}m")
+                    @(_metar.VisibilityMeters >= 9999 ? "10km+" : $"{_metar.VisibilityMeters}m")
                 </span>
             </div>
         </div>
@@ -294,7 +294,7 @@ else
                                 {
                                     <span class="tabular-nums">
                                         <span class="text-base-content/80">VIS</span>
-                                        @(p.VisibilityMeters >= 9999 ? "9999m" : $"{p.VisibilityMeters}m")
+                                        @(p.VisibilityMeters >= 9999 ? "10km+" : $"{p.VisibilityMeters}m")
                                     </span>
                                 }
                                 @foreach (var wx in p.WeatherConditions)
