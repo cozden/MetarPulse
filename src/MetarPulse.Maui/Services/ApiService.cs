@@ -191,14 +191,16 @@ public class ApiService
         catch { return null; }
     }
 
-    public async Task<bool> UpsertNotificationPrefAsync(NotificationPref pref, CancellationToken ct = default)
+    public async Task<(bool Ok, string? Error)> UpsertNotificationPrefAsync(NotificationPref pref, CancellationToken ct = default)
     {
         try
         {
             var resp = await _http.PostAsJsonAsync("api/notifications", pref, ct);
-            return resp.IsSuccessStatusCode;
+            if (resp.IsSuccessStatusCode) return (true, null);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+            return (false, $"HTTP {(int)resp.StatusCode}: {body}");
         }
-        catch { return false; }
+        catch (Exception ex) { return (false, ex.Message); }
     }
 
     public async Task<bool> DeleteNotificationPrefAsync(string icao, CancellationToken ct = default)

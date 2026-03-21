@@ -43,7 +43,6 @@
 
 @* ── Filtreler ────────────────────────────────────────────────────────────── *@
 <div class="flex gap-2 mb-3 flex-wrap">
-    <button class="btn btn-xs @(_filter == "all"     ? "btn-primary"   : "btn-ghost")" @onclick='() => SetFilter("all")'>Tümü (@_notams.Count)</button>
     <button class="btn btn-xs @(_filter == "unread"  ? "btn-secondary" : "btn-ghost")" @onclick='() => SetFilter("unread")'>
         Okunmadı (@UnreadCount)
         @if (UnreadCount > 0 && _filter != "unread")
@@ -51,6 +50,7 @@
             <span class="badge badge-secondary badge-xs ml-1">!</span>
         }
     </button>
+    <button class="btn btn-xs @(_filter == "all"     ? "btn-primary"   : "btn-ghost")" @onclick='() => SetFilter("all")'>Tümü (@_notams.Count)</button>
     <button class="btn btn-xs @(_filter == "Warning" ? "btn-error"     : "btn-ghost")" @onclick='() => SetFilter("Warning")'>Uyarı (@_notams.Count(n => n.VfrImpact == "Warning"))</button>
     <button class="btn btn-xs @(_filter == "Caution" ? "btn-warning"   : "btn-ghost")" @onclick='() => SetFilter("Caution")'>Dikkat (@_notams.Count(n => n.VfrImpact == "Caution"))</button>
     <button class="btn btn-xs @(_filter == "Advisory"? "btn-info"      : "btn-ghost")" @onclick='() => SetFilter("Advisory")'>Bilgi (@_notams.Count(n => n.VfrImpact == "Advisory"))</button>

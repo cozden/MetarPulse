@@ -15,6 +15,14 @@ taskkill /FI "WINDOWTITLE eq MetarPulse MAUI" /T /F >nul 2>&1
 taskkill /IM MetarPulse.Api.exe /T /F >nul 2>&1
 
 echo [2/4] Stopping ngrok...
+rem ngrok.exe'yi bul, parent cmd.exe penceresini de kapat
+for /f "tokens=2" %%P in ('tasklist /FI "IMAGENAME eq ngrok.exe" /NH 2^>nul ^| findstr "ngrok.exe"') do (
+    rem ngrok'un parent PID'ini bul (wmic ile) ve o cmd penceresini kapat
+    for /f "tokens=2 delims==" %%Q in ('wmic process where "ProcessId=%%P" get ParentProcessId /value 2^>nul ^| findstr "ParentProcessId"') do (
+        taskkill /PID %%Q /T /F >nul 2>&1
+    )
+    taskkill /PID %%P /T /F >nul 2>&1
+)
 taskkill /FI "WINDOWTITLE eq MetarPulse ngrok" /T /F >nul 2>&1
 taskkill /IM ngrok.exe /T /F >nul 2>&1
 

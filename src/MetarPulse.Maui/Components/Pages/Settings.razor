@@ -186,13 +186,22 @@
                                         <div class="flex items-center gap-1.5">
                                             <input type="time" class="input input-bordered input-xs w-22 tabular-nums text-center"
                                                    value="@pref.StartTime[..5]"
-                                                   @oninput="e => SetPrefTime(pref, true, e.Value?.ToString())" />
+                                                   @oninput="e => SetPrefTime(pref, true, e.Value?.ToString())"
+                                                   @onchange="e => SetPrefTime(pref, true, e.Value?.ToString())" />
                                             <span class="text-[0.6rem] text-base-content/40">—</span>
                                             <input type="time" class="input input-bordered input-xs w-22 tabular-nums text-center"
                                                    value="@pref.EndTime[..5]"
-                                                   @oninput="e => SetPrefTime(pref, false, e.Value?.ToString())" />
+                                                   @oninput="e => SetPrefTime(pref, false, e.Value?.ToString())"
+                                                   @onchange="e => SetPrefTime(pref, false, e.Value?.ToString())" />
                                         </div>
                                     </div>
+
+                                    @if (_saveError != null && _savingIcao == null && _lastSavedIcao == icao)
+                                    {
+                                        <div class="text-xs text-error bg-error/10 rounded px-2 py-1">
+                                            Kaydetme hatası: @_saveError
+                                        </div>
+                                    }
 
                                     <div class="flex gap-2 mt-1">
                                         <button class="btn btn-primary btn-xs flex-1"
@@ -251,7 +260,7 @@
                 </div>
                 <div class="flex justify-between">
                     <span>Versiyon</span>
-                    <span class="font-mono text-base-content">1.0.7</span>
+                    <span class="font-mono text-base-content">@_appVersion</span>
                 </div>
                 <div class="flex justify-between">
                     <span>Platform</span>
@@ -268,6 +277,8 @@
 </div>
 
 @code {
+    private string _appVersion = AppInfo.Current.VersionString;
+
     private async Task OnThemeToggle(ChangeEventArgs e)
     {
         await Theme.ToggleAsync();
@@ -303,6 +314,8 @@
     private bool _prefsLoading;
     private string? _expandedIcao;
     private string? _savingIcao;
+    private string? _saveError;
+    private string? _lastSavedIcao;
 
     // Yeni meydan ekleme
     private bool _addingNew;
@@ -385,18 +398,31 @@
     private async Task SavePref(NotificationPref pref)
     {
         _savingIcao = pref.StationIcao;
+        _saveError  = null;
+        _lastSavedIcao = pref.StationIcao;
         StateHasChanged();
-        await Api.UpsertNotificationPrefAsync(pref);
+
+        var (ok, error) = await Api.UpsertNotificationPrefAsync(pref);
+
         _savingIcao = null;
-        _expandedIcao = null;
+        if (ok)
+        {
+            _expandedIcao = null;
+        }
+        else
+        {
+            _saveError = error ?? "Bilinmeyen hata";
+        }
         StateHasChanged();
     }
 
     private void SetPrefTime(NotificationPref pref, bool isStart, string? val)
     {
         if (string.IsNullOrEmpty(val)) return;
-        if (isStart) pref.StartTime = val + ":00";
-        else pref.EndTime = val + ":00";
+        // "HH:mm" veya "HH:mm:ss" formatını normalize et → "HH:mm:00"
+        var normalized = val.Length >= 8 ? val[..8] : val.Length == 5 ? val + ":00" : val;
+        if (isStart) pref.StartTime = normalized;
+        else pref.EndTime = normalized;
     }
 
     private async Task DeletePref(string icao)
