@@ -105,8 +105,14 @@ public class MgmRasatWeatherProvider : BaseWeatherProvider
     {
         try
         {
+            // Önce LTFM ile gerçek veri dene
             var metar = await GetMetarAsync("LTFM", ct);
-            return metar != null;
+            if (metar != null) return true;
+
+            // METAR null geldiyse endpoint'in erişilebilir olup olmadığını kontrol et
+            var response = await GetWithResilienceAsync($"{Config.BaseUrl}/api/aviation/metar/LTFM", ct);
+            // 200, 404, 400 → sunucu yanıt veriyor demektir; null → bağlantı yok
+            return response != null;
         }
         catch
         {

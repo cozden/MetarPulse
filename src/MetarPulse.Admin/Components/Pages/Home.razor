@@ -1,0 +1,260 @@
+@page "/"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+@inject IHttpClientFactory HttpFactory
+@inject ILogger<Home> Logger
+
+<PageTitle>Dashboard — MetarPulse Admin</PageTitle>
+
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-xl font-bold text-base-content">Dashboard</h1>
+        <p class="text-sm text-base-content/60 mt-1">Sistem genel bakış</p>
+    </div>
+    <button class="btn btn-sm btn-outline" @onclick="LoadAsync" disabled="@_loading">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Yenile
+    </button>
+</div>
+
+@* ── Özet Kartlar ───────────────────────────────────────────────────────── *@
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="stat bg-base-100 rounded-xl shadow-sm">
+        <div class="stat-figure text-primary opacity-60">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        </div>
+        <div class="stat-title text-xs">Toplam Kullanıcı</div>
+        <div class="stat-value text-2xl">@(_loading ? "..." : _stats?.TotalUsers.ToString() ?? "—")</div>
+    </div>
+
+    <div class="stat bg-base-100 rounded-xl shadow-sm">
+        <div class="stat-figure text-secondary opacity-60">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+            </svg>
+        </div>
+        <div class="stat-title text-xs">Kayıtlı Meydan</div>
+        <div class="stat-value text-2xl">@(_loading ? "..." : _stats?.ActiveBookmarks.ToString() ?? "—")</div>
+    </div>
+
+    <div class="stat bg-base-100 rounded-xl shadow-sm">
+        <div class="stat-figure text-accent opacity-60">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+            </svg>
+        </div>
+        <div class="stat-title text-xs">METAR (24h)</div>
+        <div class="stat-value text-2xl">@(_loading ? "..." : _stats?.MetarsLast24h.ToString() ?? "—")</div>
+    </div>
+
+    <div class="stat bg-base-100 rounded-xl shadow-sm">
+        <div class="stat-figure text-warning opacity-60">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+        </div>
+        <div class="stat-title text-xs">NOTAM</div>
+        <div class="stat-value text-2xl">@(_loading ? "..." : _stats?.NotamCount.ToString() ?? "—")</div>
+    </div>
+</div>
+
+@* ── Provider Durumu + Hızlı Erişim ─────────────────────────────────────── *@
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="card-title text-sm">Provider Durumu</h2>
+                @if (_stats != null)
+                {
+                    <span class="badge @(_stats.HealthyProviders == _stats.TotalProviders ? "badge-success" : "badge-warning") badge-sm">
+                        @_stats.HealthyProviders / @_stats.TotalProviders OK
+                    </span>
+                }
+            </div>
+
+            @if (_loading)
+            {
+                <div class="flex items-center gap-2 text-base-content/50 text-sm">
+                    <span class="loading loading-spinner loading-xs"></span>
+                    <span>Yükleniyor...</span>
+                </div>
+            }
+            else if (_providers.Count == 0)
+            {
+                <p class="text-sm text-base-content/50">Veri yok</p>
+            }
+            else
+            {
+                <div class="flex flex-col gap-1">
+                    @foreach (var p in _providers)
+                    {
+                        <div class="flex items-center justify-between text-sm py-1 border-b border-base-200 last:border-0">
+                            <span class="font-mono text-xs">@p.ProviderName</span>
+                            <div class="flex items-center gap-2">
+                                @if (!p.IsEnabled)
+                                {
+                                    <span class="badge badge-ghost badge-xs">Pasif</span>
+                                }
+                                else if (p.IsCircuitOpen)
+                                {
+                                    <span class="badge badge-warning badge-xs">Circuit</span>
+                                }
+                                else if (p.IsHealthy)
+                                {
+                                    <span class="badge badge-success badge-xs">OK</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-error badge-xs">HATA</span>
+                                }
+                                <span class="text-xs text-base-content/40">P@p.Priority</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="card-actions mt-2">
+                <a href="/providers" class="btn btn-xs btn-ghost text-primary">Provider Yönetimi →</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+        <div class="card-body p-4">
+            <h2 class="card-title text-sm mb-3">Hızlı Erişim</h2>
+            <div class="grid grid-cols-2 gap-2">
+                <a href="/providers" class="btn btn-sm btn-outline justify-start gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
+                    </svg>
+                    Provider'lar
+                </a>
+                <a href="/users" class="btn btn-sm btn-outline justify-start gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    Kullanıcılar
+                </a>
+                <a href="/cache" class="btn btn-sm btn-outline justify-start gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+                    </svg>
+                    Cache
+                </a>
+                <a href="/notams" class="btn btn-sm btn-outline justify-start gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    NOTAM
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-warning text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        API bağlantısı kurulamadı: @_error
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private StatsDto? _stats;
+    private List<ProviderVm> _providers = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+
+            var statsTask     = http.GetFromJsonAsync<StatsDto>("api/admin/stats");
+            var providersTask = http.GetFromJsonAsync<List<ProviderDto>>("api/providers");
+            var healthTask    = http.GetFromJsonAsync<List<HealthDto>>("api/providers/health");
+
+            await Task.WhenAll(statsTask, providersTask, healthTask);
+
+            _stats = await statsTask;
+
+            var providers = await providersTask ?? [];
+            var health    = (await healthTask ?? [])
+                .ToDictionary(h => h.ProviderName, StringComparer.OrdinalIgnoreCase);
+
+            _providers = providers
+                .OrderBy(p => p.Priority)
+                .Select(p => new ProviderVm
+                {
+                    ProviderName  = p.ProviderName,
+                    Priority      = p.Priority,
+                    IsEnabled     = p.IsEnabled,
+                    IsHealthy     = health.TryGetValue(p.ProviderName, out var h) && h.IsHealthy,
+                    IsCircuitOpen = health.TryGetValue(p.ProviderName, out var hc) && hc.IsCircuitOpen
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Logger.LogError(ex, "Dashboard yüklenemedi");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private record StatsDto(
+        int TotalUsers,
+        int ActiveBookmarks,
+        int MetarsLast24h,
+        int NotamCount,
+        int HealthyProviders,
+        int TotalProviders);
+
+    private record ProviderDto(string ProviderName, int Priority, bool IsEnabled, bool IsHealthy);
+
+    private record HealthDto(
+        string ProviderName,
+        bool IsHealthy,
+        bool IsCircuitOpen,
+        string LastChecked,
+        DateTime? LastSuccess,
+        string? LastError);
+
+    private class ProviderVm
+    {
+        public string ProviderName { get; set; } = "";
+        public int Priority { get; set; }
+        public bool IsEnabled { get; set; }
+        public bool IsHealthy { get; set; }
+        public bool IsCircuitOpen { get; set; }
+    }
+}

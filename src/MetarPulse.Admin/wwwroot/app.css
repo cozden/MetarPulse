@@ -1,0 +1,282 @@
+/* ─── MetarPulse Admin — Global Styles ─────────────────────────────────────── */
+
+html, body {
+    font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Theme Transition ─────────────────────────────────────────────────────── */
+*, *::before, *::after {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+}
+
+/* Disable transitions on interactive elements to avoid sluggishness */
+button, a, input, select, textarea {
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+                color 0.1s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+/* ─── Material Elevation (box-shadow) ─────────────────────────────────────── */
+.mat-elevation-1 { box-shadow: 0 1px 2px rgba(0,0,0,.15), 0 1px 3px rgba(0,0,0,.1); }
+.mat-elevation-2 { box-shadow: 0 2px 4px rgba(0,0,0,.15), 0 1px 6px rgba(0,0,0,.1); }
+.mat-elevation-3 { box-shadow: 0 4px 8px rgba(0,0,0,.15), 0 2px 10px rgba(0,0,0,.1); }
+
+/* ─── Sidebar ──────────────────────────────────────────────────────────────── */
+.admin-sidebar {
+    width: 260px;
+    min-width: 260px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ─── Sidebar Nav Item ────────────────────────────────────────────────────── */
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+    opacity: 0.72;
+    border-left: 3px solid transparent;
+    margin-bottom: 1px;
+}
+
+.nav-item:hover {
+    background-color: oklch(var(--b2));
+    opacity: 1;
+    text-decoration: none;
+}
+
+.nav-item.active {
+    background-color: oklch(var(--p) / 0.12);
+    color: oklch(var(--p));
+    opacity: 1;
+    border-left-color: oklch(var(--p));
+    font-weight: 600;
+}
+
+.nav-item svg {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+}
+
+/* ─── Nav Section Header ──────────────────────────────────────────────────── */
+.nav-section-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.4;
+    padding: 12px 14px 4px;
+    margin-top: 4px;
+}
+
+/* ─── Topbar ──────────────────────────────────────────────────────────────── */
+.admin-topbar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid oklch(var(--b3));
+    background: oklch(var(--b1));
+}
+
+/* ─── Theme Toggle Button ─────────────────────────────────────────────────── */
+.theme-toggle-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    background: oklch(var(--b2));
+    color: oklch(var(--bc));
+    flex-shrink: 0;
+}
+
+.theme-toggle-btn:hover {
+    background: oklch(var(--b3));
+}
+
+/* ─── User Avatar ─────────────────────────────────────────────────────────── */
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* ─── Content Area ────────────────────────────────────────────────────────── */
+.admin-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.admin-page {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 32px;
+}
+
+/* ─── Material Card ───────────────────────────────────────────────────────── */
+.mat-card {
+    background: oklch(var(--b1));
+    border-radius: 12px;
+    border: 1px solid oklch(var(--b3));
+    padding: 24px;
+}
+
+/* ─── Page Title ─────────────────────────────────────────────────────────── */
+.page-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+}
+
+/* ─── Stat Card ──────────────────────────────────────────────────────────── */
+.stat-card {
+    background: oklch(var(--b1));
+    border-radius: 12px;
+    border: 1px solid oklch(var(--b3));
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.stat-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.stat-card-value {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
+}
+
+.stat-card-label {
+    font-size: 12.5px;
+    opacity: 0.55;
+    font-weight: 500;
+}
+
+/* ─── Table ──────────────────────────────────────────────────────────────── */
+.mat-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+}
+
+.mat-table thead th {
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    padding: 8px 16px;
+    text-align: left;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.mat-table tbody tr {
+    border-bottom: 1px solid oklch(var(--b3) / 0.5);
+}
+
+.mat-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.mat-table tbody tr:hover {
+    background: oklch(var(--b2) / 0.5);
+}
+
+.mat-table tbody td {
+    padding: 12px 16px;
+    vertical-align: middle;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: oklch(var(--b3)); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: oklch(var(--bc) / 0.3); }
+
+/* ─── Blazor Validation (keep minimal) ───────────────────────────────────── */
+.valid.modified:not([type=checkbox]) { outline: 1px solid oklch(var(--su)); }
+.invalid { outline: 1px solid oklch(var(--er)); }
+.validation-message { color: oklch(var(--er)); font-size: 12px; margin-top: 4px; }
+
+.blazor-error-boundary {
+    background: oklch(var(--er));
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+    border-radius: 8px;
+}
+
+.blazor-error-boundary::after { content: "Bir hata oluştu."; }
+
+/* ─── Theme Toggle Icons (CSS-driven, no JS state needed) ───────────────── */
+/* Dark mode (night): show sun icon (click → go light) */
+[data-theme="night"] .theme-icon-sun { display: block; }
+[data-theme="night"] .theme-icon-moon { display: none; }
+/* Light mode: show moon icon (click → go dark) */
+[data-theme="light"] .theme-icon-sun { display: none; }
+[data-theme="light"] .theme-icon-moon { display: block; }
+/* Default fallback (no theme set yet) */
+.theme-icon-sun { display: block; }
+.theme-icon-moon { display: none; }
+
+/* ─── Logo Gradient Text ─────────────────────────────────────────────────── */
+.logo-text {
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+
+.logo-accent {
+    background: linear-gradient(135deg, oklch(var(--p)), oklch(var(--s)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ─── Logout form inline ─────────────────────────────────────────────────── */
+.logout-form {
+    display: inline;
+}

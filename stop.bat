@@ -30,9 +30,13 @@ echo [3/4] Freeing ports 5000 / 5269 (if still in use)...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5000 " ^| findstr "LISTENING"') do (
     taskkill /PID %%a /T /F >nul 2>&1
 )
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5225 " ^| findstr "LISTENING"') do (
+    taskkill /PID %%a /T /F >nul 2>&1
+)
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5269 " ^| findstr "LISTENING"') do (
     taskkill /PID %%a /T /F >nul 2>&1
 )
+
 
 echo [4/4] Stopping Docker services...
 docker compose down

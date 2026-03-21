@@ -54,6 +54,27 @@ services:
       - api
     restart: unless-stopped
 
+  # ─── Admin Panel (Blazor Server) ─────────────────────────────────────────────
+  admin:
+    build:
+      context: .
+      dockerfile: src/MetarPulse.Admin/Dockerfile
+    container_name: metarpulse-admin
+    ports:
+      - "5225:5001"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5001
+      ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=metarpulse;Username=app;Password=${POSTGRES_PASSWORD:-devpass123}"
+      Admin__ApiBaseUrl: "http://api:5000"
+      Admin__InternalApiKey: "${ADMIN_INTERNAL_API_KEY:-mp-admin-k3y-d3v-s3cr3t-2026}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+
   # ─── Cloudflare Tunnel ───────────────────────────────────────────────────────
   cloudflared:
     image: cloudflare/cloudflared:latest

@@ -622,6 +622,53 @@ namespace MetarPulse.Infrastructure.Persistence.PostgreSQL.Migrations
                     b.ToTable("pilot_profiles", (string)null);
                 });
 
+            modelBuilder.Entity("MetarPulse.Core.Models.ProviderSettingOverride", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ApiKey")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BaseUrl")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("CircuitBreakerDurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CircuitBreakerThreshold")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProviderName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("RetryCount")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("TimeoutSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ProviderSettingOverrides");
+                });
+
             modelBuilder.Entity("MetarPulse.Core.Models.RefreshToken", b =>
                 {
                     b.Property<int>("Id")

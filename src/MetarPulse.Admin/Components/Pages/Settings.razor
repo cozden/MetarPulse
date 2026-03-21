@@ -1,0 +1,292 @@
+@page "/settings"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+@inject IHttpClientFactory HttpFactory
+@inject ILogger<Settings> Logger
+
+<PageTitle>Sistem Ayarları — MetarPulse Admin</PageTitle>
+
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-xl font-bold text-base-content">Sistem Ayarları</h1>
+        <p class="text-sm text-base-content/60 mt-1">Sistem durumu, entegrasyon ve bakım modu</p>
+    </div>
+    <button class="btn btn-sm btn-outline" @onclick="LoadAsync" disabled="@_loading">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Yenile
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div class="flex items-center gap-3 text-base-content/60">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span>Yükleniyor...</span>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-error text-sm">
+        <span>@_error</span>
+        <button class="btn btn-sm btn-ghost ml-auto" @onclick="LoadAsync">Yeniden Dene</button>
+    </div>
+}
+else if (_settings is not null)
+{
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        @* ── Sistem Bilgisi ─────────────────────────────────────────────── *@
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-5">
+                <h2 class="card-title text-sm mb-3">Sistem Bilgisi</h2>
+                <dl class="flex flex-col gap-2 text-sm">
+                    <div class="flex justify-between">
+                        <dt class="text-base-content/60">Ortam</dt>
+                        <dd>
+                            <span class="badge @(_settings.System.Environment == "Production" ? "badge-success" : "badge-warning") badge-sm">
+                                @_settings.System.Environment
+                            </span>
+                        </dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-base-content/60">.NET Versiyonu</dt>
+                        <dd class="font-mono text-xs">@_settings.System.DotNetVersion</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-base-content/60">Başlangıç</dt>
+                        <dd class="text-xs">@_settings.System.StartedAt.ToString("dd.MM.yyyy HH:mm")Z</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-base-content/60">Uptime</dt>
+                        <dd class="font-mono text-xs">@FormatUptime(_settings.System.UptimeSeconds)</dd>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <dt class="text-base-content/60">Veritabanı</dt>
+                        <dd>
+                            @if (_settings.Database.IsConnected)
+                            {
+                                <span class="badge badge-success badge-sm">Bağlı</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-error badge-sm">Bağlantı Yok</span>
+                            }
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        @* ── Bakım Modu ──────────────────────────────────────────────────── *@
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-5">
+                <h2 class="card-title text-sm mb-3">Bakım Modu</h2>
+                <p class="text-sm text-base-content/60 mb-4">
+                    Aktif edildiğinde <code class="font-mono text-xs bg-base-200 px-1 rounded">/api/admin/*</code> ve
+                    <code class="font-mono text-xs bg-base-200 px-1 rounded">/health</code> dışındaki tüm endpoint'ler
+                    <span class="text-warning font-semibold">503</span> döner.
+                </p>
+
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox"
+                               class="toggle @(_maintenanceMode ? "toggle-error" : "toggle-success") toggle-md"
+                               checked="@_maintenanceMode"
+                               disabled="@_busy"
+                               @onchange="ToggleMaintenanceAsync" />
+                        <span class="font-semibold @(_maintenanceMode ? "text-error" : "text-success")">
+                            @(_maintenanceMode ? "BAKIM MODUNDA" : "Normal Çalışıyor")
+                        </span>
+                    </label>
+                </div>
+
+                @if (_maintenanceMode)
+                {
+                    <div class="alert alert-warning text-xs mt-3">
+                        Kullanıcılar API'ye erişemiyor. İşleminizi tamamladıktan sonra bakım modunu kapatmayı unutmayın.
+                    </div>
+                }
+            </div>
+        </div>
+
+        @* ── Polling Ayarları ─────────────────────────────────────────────── *@
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-5">
+                <h2 class="card-title text-sm mb-3">Polling Ayarları</h2>
+                <dl class="flex flex-col gap-2 text-sm">
+                    <div class="flex justify-between">
+                        <dt class="text-base-content/60">METAR kontrol döngüsü</dt>
+                        <dd class="font-mono badge badge-ghost badge-sm">@_settings.Polling.MetarCheckIntervalSeconds sn</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-base-content/60">METAR normal interval</dt>
+                        <dd class="font-mono badge badge-ghost badge-sm">@_settings.Polling.MetarIdleIntervalMinutes dk</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-base-content/60">METAR yayın penceresi</dt>
+                        <dd class="font-mono badge badge-ghost badge-sm">@_settings.Polling.MetarHotIntervalSeconds sn</dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-base-content/60">NOTAM polling</dt>
+                        <dd class="font-mono badge badge-ghost badge-sm">@_settings.Polling.NotamPollIntervalMinutes dk</dd>
+                    </div>
+                </dl>
+                <p class="text-xs text-base-content/40 mt-3">Bu değerler kod ile yapılandırılmıştır.</p>
+            </div>
+        </div>
+
+        @* ── Entegrasyonlar ───────────────────────────────────────────────── *@
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body p-5">
+                <h2 class="card-title text-sm mb-3">Entegrasyonlar</h2>
+                <dl class="flex flex-col gap-3 text-sm">
+                    <div class="flex justify-between items-center">
+                        <dt class="text-base-content/60">Firebase FCM</dt>
+                        <dd>
+                            @if (_settings.Fcm.IsConfigured)
+                            {
+                                <span class="badge badge-success badge-sm">Yapılandırıldı</span>
+                            }
+                            else
+                            {
+                                <span class="badge badge-warning badge-sm">Yapılandırılmadı</span>
+                            }
+                        </dd>
+                    </div>
+
+                    @foreach (var kv in _settings.ProviderApiKeys)
+                    {
+                        <div class="flex justify-between items-center">
+                            <dt class="text-base-content/60 font-mono text-xs">@kv.Key API Key</dt>
+                            <dd>
+                                @if (kv.Value)
+                                {
+                                    <span class="badge badge-success badge-sm">Mevcut</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-warning badge-sm">Eksik</span>
+                                }
+                            </dd>
+                        </div>
+                    }
+                </dl>
+                <p class="text-xs text-base-content/40 mt-3">API key'leri <code>appsettings.json</code> veya environment variable ile yapılandırın.</p>
+            </div>
+        </div>
+
+    </div>
+}
+
+@if (_statusMessage is not null)
+{
+    <div class="alert @(_statusIsError ? "alert-error" : "alert-success") text-sm mt-4">
+        @_statusMessage
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _busy = false;
+    private string? _error;
+    private string? _statusMessage;
+    private bool _statusIsError;
+    private SettingsDto? _settings;
+    private bool _maintenanceMode;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            _settings = await http.GetFromJsonAsync<SettingsDto>("api/admin/settings");
+            if (_settings != null)
+                _maintenanceMode = _settings.System.MaintenanceMode;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Logger.LogError(ex, "Ayarlar yüklenemedi");
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task ToggleMaintenanceAsync(ChangeEventArgs e)
+    {
+        var enable = (bool)(e.Value ?? false);
+        _busy = true;
+        _statusMessage = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.PutAsync($"api/admin/settings/maintenance?enabled={enable}", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                _maintenanceMode = enable;
+                ShowStatus($"Bakım modu → {(enable ? "AÇIK" : "KAPALI")}", false);
+            }
+            else
+            {
+                ShowStatus($"Hata: {resp.StatusCode}", true);
+            }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ShowStatus(string msg, bool isError)
+    {
+        _statusMessage = msg;
+        _statusIsError = isError;
+    }
+
+    private static string FormatUptime(int totalSeconds)
+    {
+        var d = totalSeconds / 86400;
+        var h = (totalSeconds % 86400) / 3600;
+        var m = (totalSeconds % 3600) / 60;
+        var s = totalSeconds % 60;
+        if (d > 0) return $"{d}g {h:D2}:{m:D2}:{s:D2}";
+        return $"{h:D2}:{m:D2}:{s:D2}";
+    }
+
+    // ── DTO'lar ──────────────────────────────────────────────────────────────
+
+    private class SettingsDto
+    {
+        public SystemInfo System { get; set; } = new();
+        public DbInfo Database { get; set; } = new();
+        public FcmInfo Fcm { get; set; } = new();
+        public Dictionary<string, bool> ProviderApiKeys { get; set; } = new();
+        public PollingInfo Polling { get; set; } = new();
+    }
+
+    private class SystemInfo
+    {
+        public string Environment { get; set; } = "";
+        public string DotNetVersion { get; set; } = "";
+        public DateTime StartedAt { get; set; }
+        public int UptimeSeconds { get; set; }
+        public bool MaintenanceMode { get; set; }
+    }
+
+    private class DbInfo   { public bool IsConnected { get; set; } }
+    private class FcmInfo  { public bool IsConfigured { get; set; } }
+
+    private class PollingInfo
+    {
+        public int MetarCheckIntervalSeconds { get; set; }
+        public int MetarIdleIntervalMinutes { get; set; }
+        public int MetarHotIntervalSeconds { get; set; }
+        public int NotamPollIntervalMinutes { get; set; }
+    }
+}

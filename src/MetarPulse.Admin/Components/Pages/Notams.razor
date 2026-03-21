@@ -1,0 +1,380 @@
+@page "/notams"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+@inject IHttpClientFactory HttpFactory
+@inject ILogger<Notams> Logger
+
+<PageTitle>NOTAM Yönetimi — MetarPulse Admin</PageTitle>
+
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-xl font-bold text-base-content">NOTAM Yönetimi</h1>
+        <p class="text-sm text-base-content/60 mt-1">Aktif ve geçmiş NOTAM kayıtları</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <button class="btn btn-sm btn-outline" @onclick="LoadAsync" disabled="@_loading">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Yenile
+        </button>
+        <button class="btn btn-sm btn-primary" @onclick="PollAsync" disabled="@_busy">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Polling Başlat
+        </button>
+        <button class="btn btn-sm btn-outline btn-warning" @onclick="PurgeExpiredAsync" disabled="@_busy">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Süresi Dolanları Temizle
+        </button>
+    </div>
+</div>
+
+@* ── Filtreler ───────────────────────────────────────────────────────────── *@
+<div class="flex flex-wrap items-center gap-3 mb-4">
+    <input class="input input-bordered input-sm w-32"
+           placeholder="ICAO"
+           @bind="_filterIcao"
+           @bind:event="oninput"
+           @onkeydown="OnKeyDown" />
+
+    <select class="select select-bordered select-sm" @bind="_filterImpact" @bind:after="SearchAsync">
+        <option value="">Tüm Etkiler</option>
+        <option value="Warning">Warning</option>
+        <option value="Caution">Caution</option>
+        <option value="Advisory">Advisory</option>
+        <option value="None">None</option>
+    </select>
+
+    <label class="flex items-center gap-2 text-sm cursor-pointer">
+        <input type="checkbox" class="checkbox checkbox-sm" @bind="_filterActiveOnly" @bind:after="SearchAsync" />
+        Sadece Aktif
+    </label>
+
+    <button class="btn btn-sm btn-ghost" @onclick="SearchAsync">Ara</button>
+    <button class="btn btn-sm btn-ghost" @onclick="ResetAsync">Sıfırla</button>
+
+    @if (_total > 0)
+    {
+        <span class="text-xs text-base-content/50 ml-auto">@_total kayıt</span>
+    }
+</div>
+
+@if (_loading)
+{
+    <div class="flex items-center gap-3 text-base-content/60">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span>Yükleniyor...</span>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-error text-sm mb-4">
+        <span>@_error</span>
+        <button class="btn btn-sm btn-ghost ml-auto" @onclick="LoadAsync">Yeniden Dene</button>
+    </div>
+}
+else
+{
+    <div class="overflow-x-auto rounded-xl shadow-sm">
+        <table class="table table-zebra bg-base-100 w-full">
+            <thead>
+                <tr class="text-xs text-base-content/60 uppercase">
+                    <th>NOTAM ID</th>
+                    <th>ICAO</th>
+                    <th>VFR Etki</th>
+                    <th>Trafik</th>
+                    <th>Başlangıç</th>
+                    <th>Bitiş</th>
+                    <th>Konu</th>
+                    <th>Kaynak</th>
+                    <th>İçerik</th>
+                    <th class="text-center">Sil</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_items.Count == 0)
+                {
+                    <tr>
+                        <td colspan="10" class="text-center text-base-content/40 py-8">NOTAM bulunamadı</td>
+                    </tr>
+                }
+                @foreach (var n in _items)
+                {
+                    <tr class="hover @(n.IsExpired ? "opacity-50" : "")">
+                        <td class="font-mono text-xs font-bold">@n.NotamId</td>
+                        <td class="font-mono text-sm font-bold">@n.AirportIdent</td>
+                        <td>
+                            <span class="badge badge-sm @ImpactBadge(n.VfrImpact)">@n.VfrImpact</span>
+                        </td>
+                        <td class="text-xs text-base-content/60">@n.Traffic</td>
+                        <td class="text-xs text-base-content/70">@n.EffectiveFrom.ToString("dd.MM HH:mm")Z</td>
+                        <td class="text-xs @(n.IsExpired ? "text-error" : "text-base-content/70")">
+                            @if (n.IsPermanent)
+                            {
+                                <span class="badge badge-ghost badge-xs">PERM</span>
+                            }
+                            else if (n.EffectiveTo.HasValue)
+                            {
+                                @(n.EffectiveTo.Value.ToString("dd.MM HH:mm") + "Z")
+                            }
+                            else
+                            {
+                                <span class="text-base-content/30">—</span>
+                            }
+                        </td>
+                        <td class="text-xs font-mono text-base-content/60">@n.Subject</td>
+                        <td class="text-xs">
+                            <span class="badge badge-ghost badge-xs">@n.SourceProvider</span>
+                        </td>
+                        <td class="text-xs max-w-[220px]">
+                            @if (_expandedIds.Contains(n.Id))
+                            {
+                                <div class="whitespace-pre-wrap break-all text-base-content/70 font-mono text-[10px]">@n.RawText</div>
+                                <button class="btn btn-xs btn-ghost mt-1" @onclick="() => ToggleExpand(n.Id)">▲</button>
+                            }
+                            else
+                            {
+                                <span class="truncate block max-w-[200px] text-base-content/50" title="@n.RawText">
+                                    @(n.RawText.Length > 45 ? n.RawText[..45] + "…" : n.RawText)
+                                </span>
+                                <button class="btn btn-xs btn-ghost" @onclick="() => ToggleExpand(n.Id)">▼</button>
+                            }
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-xs btn-outline btn-error"
+                                    disabled="@_busy"
+                                    @onclick="() => ConfirmDelete(n.Id, n.NotamId)"
+                                    title="Sil">
+                                ✕
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_totalPages > 1)
+    {
+        <div class="flex items-center justify-center gap-2 mt-4">
+            <button class="btn btn-sm btn-ghost" disabled="@(_page <= 1 || _busy)" @onclick="PrevPage">←</button>
+            <span class="text-sm">@_page / @_totalPages</span>
+            <button class="btn btn-sm btn-ghost" disabled="@(_page >= _totalPages || _busy)" @onclick="NextPage">→</button>
+        </div>
+    }
+}
+
+@if (_statusMessage is not null)
+{
+    <div class="alert @(_statusIsError ? "alert-error" : "alert-success") text-sm mt-4">
+        @_statusMessage
+    </div>
+}
+
+@* ── Silme onay modal ─────────────────────────────────────────────────────── *@
+@if (_deleteTarget.HasValue)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">NOTAM Sil</h3>
+            <p class="py-4 text-sm">
+                <span class="font-mono text-error">@_deleteTargetLabel</span> silinecek. Emin misiniz?
+            </p>
+            <div class="modal-action">
+                <button class="btn btn-sm btn-ghost" @onclick="() => _deleteTarget = null">İptal</button>
+                <button class="btn btn-sm btn-error" @onclick="ExecuteDeleteAsync" disabled="@_busy">Sil</button>
+            </div>
+        </div>
+        <div class="modal-backdrop" @onclick="() => _deleteTarget = null"></div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _busy = false;
+    private string? _error;
+    private string? _statusMessage;
+    private bool _statusIsError;
+
+    private string _filterIcao = "";
+    private string _filterImpact = "";
+    private bool _filterActiveOnly = true;
+    private int _page = 1;
+    private const int PageSize = 50;
+    private int _total;
+    private int _totalPages => (int)Math.Ceiling(_total / (double)PageSize);
+
+    private List<NotamVm> _items = [];
+    private HashSet<int> _expandedIds = [];
+    private int? _deleteTarget;
+    private string _deleteTargetLabel = "";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var url = $"api/admin/notams?page={_page}&pageSize={PageSize}&activeOnly={_filterActiveOnly}";
+            if (!string.IsNullOrWhiteSpace(_filterIcao))   url += $"&icao={Uri.EscapeDataString(_filterIcao.ToUpper())}";
+            if (!string.IsNullOrWhiteSpace(_filterImpact)) url += $"&impact={Uri.EscapeDataString(_filterImpact)}";
+
+            var result = await http.GetFromJsonAsync<PagedResult>(url);
+            _total = result?.Total ?? 0;
+            _items = result?.Items.Select(Map).ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Logger.LogError(ex, "NOTAM listesi yüklenemedi");
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task SearchAsync() { _page = 1; await LoadAsync(); }
+
+    private async Task ResetAsync()
+    {
+        _filterIcao = ""; _filterImpact = ""; _filterActiveOnly = true; _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchAsync();
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { if (_page < _totalPages) { _page++; await LoadAsync(); } }
+
+    private void ToggleExpand(int id)
+    {
+        if (!_expandedIds.Remove(id)) _expandedIds.Add(id);
+    }
+
+    private async Task PollAsync()
+    {
+        _busy = true;
+        _statusMessage = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.PostAsync("api/admin/notams/poll", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<PollResult>();
+                ShowStatus(body?.Message ?? "Polling tamamlandı", false);
+                await LoadAsync();
+            }
+            else { ShowStatus($"Polling başarısız: {resp.StatusCode}", true); }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private async Task PurgeExpiredAsync()
+    {
+        _busy = true;
+        _statusMessage = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.DeleteAsync("api/admin/notams/expired");
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<PurgeResult>();
+                ShowStatus(body?.Message ?? "Temizleme tamamlandı", false);
+                await LoadAsync();
+            }
+            else { ShowStatus($"Hata: {resp.StatusCode}", true); }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ConfirmDelete(int id, string label) { _deleteTarget = id; _deleteTargetLabel = label; }
+
+    private async Task ExecuteDeleteAsync()
+    {
+        if (_deleteTarget is null) return;
+        var id = _deleteTarget.Value;
+        _deleteTarget = null;
+        _busy = true;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.DeleteAsync($"api/admin/notams/{id}");
+            if (resp.IsSuccessStatusCode) { ShowStatus($"NOTAM #{id} silindi", false); await LoadAsync(); }
+            else { ShowStatus($"Silme başarısız: {resp.StatusCode}", true); }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ShowStatus(string msg, bool isError) { _statusMessage = msg; _statusIsError = isError; }
+
+    private static string ImpactBadge(string impact) => impact switch
+    {
+        "Warning"  => "badge-error",
+        "Caution"  => "badge-warning",
+        "Advisory" => "badge-info",
+        _          => "badge-ghost"
+    };
+
+    private static NotamVm Map(NotamDto d) => new()
+    {
+        Id            = d.Id,
+        NotamId       = d.NotamId,
+        AirportIdent  = d.AirportIdent,
+        VfrImpact     = d.VfrImpact,
+        Traffic       = d.Traffic,
+        EffectiveFrom = DateTime.Parse(d.EffectiveFrom),
+        EffectiveTo   = d.EffectiveTo != null ? DateTime.Parse(d.EffectiveTo) : null,
+        IsPermanent   = d.IsPermanent,
+        Subject       = d.Subject,
+        RawText       = d.RawText ?? "",
+        SourceProvider = d.SourceProvider ?? ""
+    };
+
+    // ── DTO'lar ──────────────────────────────────────────────────────────────
+
+    private record PagedResult(int Total, int Page, int PageSize, List<NotamDto> Items);
+
+    private record NotamDto(
+        int Id, string NotamId, string AirportIdent, string FirIdent,
+        string NotamType, string VfrImpact, string Traffic,
+        string EffectiveFrom, string? EffectiveTo, bool IsPermanent,
+        string Subject, string LowerLimit, string UpperLimit,
+        string? RawText, string? SourceProvider, string FetchedAt);
+
+    private record PollResult(string Message, int Fetched, int Added);
+    private record PurgeResult(string Message, int Deleted);
+
+    private class NotamVm
+    {
+        public int Id { get; set; }
+        public string NotamId { get; set; } = "";
+        public string AirportIdent { get; set; } = "";
+        public string VfrImpact { get; set; } = "";
+        public string Traffic { get; set; } = "";
+        public DateTime EffectiveFrom { get; set; }
+        public DateTime? EffectiveTo { get; set; }
+        public bool IsPermanent { get; set; }
+        public string Subject { get; set; } = "";
+        public string RawText { get; set; } = "";
+        public string SourceProvider { get; set; } = "";
+        public bool IsExpired => !IsPermanent && EffectiveTo.HasValue && EffectiveTo.Value < DateTime.UtcNow;
+    }
+}

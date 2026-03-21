@@ -1,0 +1,369 @@
+@page "/cache"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+@inject IHttpClientFactory HttpFactory
+@inject ILogger<Cache> Logger
+
+<PageTitle>Cache Yönetimi — MetarPulse Admin</PageTitle>
+
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-xl font-bold text-base-content">Cache Yönetimi</h1>
+        <p class="text-sm text-base-content/60 mt-1">İstasyon başına en güncel METAR kayıtları</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <button class="btn btn-sm btn-outline" @onclick="LoadAsync" disabled="@_loading">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Yenile
+        </button>
+        <button class="btn btn-sm btn-primary" @onclick="RefreshAllAsync" disabled="@_busy">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Tümünü Yenile
+        </button>
+    </div>
+</div>
+
+@* ── Arama ───────────────────────────────────────────────────────────────── *@
+<div class="flex items-center gap-3 mb-4">
+    <input class="input input-bordered input-sm w-full max-w-xs"
+           placeholder="ICAO ara... (LTBA, EGLL)"
+           @bind="_search"
+           @bind:event="oninput"
+           @onkeydown="OnKeyDown" />
+    <button class="btn btn-sm btn-ghost" @onclick="SearchAsync">Ara</button>
+    @if (!string.IsNullOrWhiteSpace(_search))
+    {
+        <button class="btn btn-sm btn-ghost" @onclick="ResetAsync">✕</button>
+    }
+    @if (_total > 0)
+    {
+        <span class="text-xs text-base-content/50 ml-auto">@_total istasyon</span>
+    }
+</div>
+
+@if (_loading)
+{
+    <div class="flex items-center gap-3 text-base-content/60">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span>Yükleniyor...</span>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-error text-sm mb-4">
+        <span>@_error</span>
+        <button class="btn btn-sm btn-ghost ml-auto" @onclick="LoadAsync">Yeniden Dene</button>
+    </div>
+}
+else
+{
+    <div class="overflow-x-auto rounded-xl shadow-sm">
+        <table class="table table-zebra bg-base-100 w-full">
+            <thead>
+                <tr class="text-xs text-base-content/60 uppercase">
+                    <th>ICAO</th>
+                    <th>Kategori</th>
+                    <th>Gözlem Zamanı</th>
+                    <th>Çekilme</th>
+                    <th>Kaynak</th>
+                    <th>Ham METAR</th>
+                    <th class="text-center">İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_items.Count == 0)
+                {
+                    <tr>
+                        <td colspan="7" class="text-center text-base-content/40 py-8">Kayıt bulunamadı</td>
+                    </tr>
+                }
+                @foreach (var item in _items)
+                {
+                    <tr class="hover">
+                        <td class="font-mono font-bold text-sm">@item.StationId</td>
+                        <td>
+                            <span class="badge badge-sm @CategoryBadge(item.Category)">@item.Category</span>
+                        </td>
+                        <td class="text-xs text-base-content/70">
+                            @item.ObservationTime.ToString("dd.MM HH:mm")Z
+                            @{
+                                var age = DateTime.UtcNow - item.ObservationTime;
+                                var ageStr = age.TotalHours >= 1 ? $"{(int)age.TotalHours}s" : $"{(int)age.TotalMinutes}dk";
+                            }
+                            <span class="text-base-content/40 ml-1">(@ageStr önce)</span>
+                        </td>
+                        <td class="text-xs text-base-content/50">
+                            @item.FetchedAt.ToString("dd.MM HH:mm")Z
+                        </td>
+                        <td class="text-xs">
+                            <span class="badge badge-ghost badge-xs">@(item.SourceProvider ?? "?")</span>
+                        </td>
+                        <td class="text-xs font-mono max-w-[300px]">
+                            @if (_expandedIds.Contains(item.StationId))
+                            {
+                                <div class="whitespace-pre-wrap break-all text-base-content/70">@item.RawText</div>
+                                <button class="btn btn-xs btn-ghost mt-1" @onclick="() => ToggleExpand(item.StationId)">▲ Daralt</button>
+                            }
+                            else
+                            {
+                                <span class="truncate block max-w-[250px] text-base-content/50" title="@item.RawText">
+                                    @(item.RawText.Length > 40 ? item.RawText[..40] + "…" : item.RawText)
+                                </span>
+                                <button class="btn btn-xs btn-ghost" @onclick="() => ToggleExpand(item.StationId)">▼ Göster</button>
+                            }
+                        </td>
+                        <td class="text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                @if (_refreshingIds.Contains(item.StationId))
+                                {
+                                    <span class="loading loading-spinner loading-xs"></span>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-xs btn-outline btn-primary"
+                                            disabled="@_busy"
+                                            @onclick="() => RefreshStationAsync(item.StationId)"
+                                            title="Yenile">
+                                        ↻
+                                    </button>
+                                }
+                                <button class="btn btn-xs btn-outline btn-error"
+                                        disabled="@_busy"
+                                        @onclick="() => ConfirmClear(item.StationId)"
+                                        title="Geçmişi sil">
+                                    ✕
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (_totalPages > 1)
+    {
+        <div class="flex items-center justify-center gap-2 mt-4">
+            <button class="btn btn-sm btn-ghost" disabled="@(_page <= 1 || _busy)" @onclick="PrevPage">←</button>
+            <span class="text-sm">@_page / @_totalPages</span>
+            <button class="btn btn-sm btn-ghost" disabled="@(_page >= _totalPages || _busy)" @onclick="NextPage">→</button>
+        </div>
+    }
+}
+
+@if (_statusMessage is not null)
+{
+    <div class="alert @(_statusIsError ? "alert-error" : "alert-success") text-sm mt-4">
+        @_statusMessage
+    </div>
+}
+
+@* ── Temizleme onay modal ─────────────────────────────────────────────────── *@
+@if (_clearTarget is not null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Cache Temizle</h3>
+            <p class="py-4 text-sm">
+                <span class="font-mono text-error">@_clearTarget</span> meydanının tüm METAR geçmişi silinecek. Emin misiniz?
+            </p>
+            <div class="modal-action">
+                <button class="btn btn-sm btn-ghost" @onclick="() => _clearTarget = null">İptal</button>
+                <button class="btn btn-sm btn-error" @onclick="ExecuteClearAsync" disabled="@_busy">Sil</button>
+            </div>
+        </div>
+        <div class="modal-backdrop" @onclick="() => _clearTarget = null"></div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _busy = false;
+    private string? _error;
+    private string? _statusMessage;
+    private bool _statusIsError;
+
+    private string _search = "";
+    private int _page = 1;
+    private const int PageSize = 50;
+    private int _total;
+    private int _totalPages => (int)Math.Ceiling(_total / (double)PageSize);
+
+    private List<CacheItemVm> _items = [];
+    private HashSet<string> _expandedIds = [];
+    private HashSet<string> _refreshingIds = [];
+    private string? _clearTarget;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var url = $"api/admin/cache?page={_page}&pageSize={PageSize}" +
+                      (string.IsNullOrWhiteSpace(_search) ? "" : $"&search={Uri.EscapeDataString(_search.ToUpper())}");
+
+            var result = await http.GetFromJsonAsync<PagedResult>(url);
+            _total = result?.Total ?? 0;
+            _items = result?.Items.Select(i => new CacheItemVm
+            {
+                StationId       = i.StationId,
+                ObservationTime = DateTime.Parse(i.ObservationTime),
+                FetchedAt       = DateTime.Parse(i.FetchedAt),
+                SourceProvider  = i.SourceProvider,
+                RawText         = i.RawText ?? "",
+                Category        = i.Category ?? "Unknown"
+            }).ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Logger.LogError(ex, "Cache listesi yüklenemedi");
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task SearchAsync() { _page = 1; await LoadAsync(); }
+    private async Task ResetAsync()  { _search = ""; _page = 1; await LoadAsync(); }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchAsync();
+    }
+
+    private async Task PrevPage() { if (_page > 1) { _page--; await LoadAsync(); } }
+    private async Task NextPage() { if (_page < _totalPages) { _page++; await LoadAsync(); } }
+
+    private void ToggleExpand(string icao)
+    {
+        if (!_expandedIds.Remove(icao)) _expandedIds.Add(icao);
+    }
+
+    private async Task RefreshStationAsync(string icao)
+    {
+        _refreshingIds.Add(icao);
+        _busy = true;
+        _statusMessage = null;
+        StateHasChanged();
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.PostAsync($"api/admin/cache/{Uri.EscapeDataString(icao)}/refresh", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                ShowStatus($"{icao} yenilendi", false);
+                await LoadAsync();
+            }
+            else
+            {
+                var body = await resp.Content.ReadAsStringAsync();
+                ShowStatus($"{icao} yenilenemedi: {resp.StatusCode}", true);
+            }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally
+        {
+            _refreshingIds.Remove(icao);
+            _busy = false;
+        }
+    }
+
+    private async Task RefreshAllAsync()
+    {
+        _busy = true;
+        _statusMessage = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.PostAsync("api/admin/cache/refresh-all", null);
+            if (resp.IsSuccessStatusCode)
+            {
+                var body = await resp.Content.ReadFromJsonAsync<RefreshAllResult>();
+                ShowStatus(body?.Message ?? "Tümü yenilendi", false);
+                await LoadAsync();
+            }
+            else
+            {
+                ShowStatus($"Hata: {resp.StatusCode}", true);
+            }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ConfirmClear(string icao) => _clearTarget = icao;
+
+    private async Task ExecuteClearAsync()
+    {
+        if (_clearTarget is null) return;
+        var icao = _clearTarget;
+        _clearTarget = null;
+        _busy = true;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.DeleteAsync($"api/admin/cache/{Uri.EscapeDataString(icao)}");
+            if (resp.IsSuccessStatusCode)
+            {
+                ShowStatus($"{icao} cache temizlendi", false);
+                await LoadAsync();
+            }
+            else
+            {
+                ShowStatus($"Silme başarısız: {resp.StatusCode}", true);
+            }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ShowStatus(string msg, bool isError)
+    {
+        _statusMessage = msg;
+        _statusIsError = isError;
+    }
+
+    private static string CategoryBadge(string category) => category switch
+    {
+        "VFR"  => "badge-success",
+        "MVFR" => "badge-info",
+        "IFR"  => "badge-warning",
+        "LIFR" => "badge-error",
+        _      => "badge-ghost"
+    };
+
+    // ── DTO'lar ──────────────────────────────────────────────────────────────
+
+    private record PagedResult(int Total, int Page, int PageSize, List<CacheItemDto> Items);
+
+    private record CacheItemDto(
+        string StationId,
+        string ObservationTime,
+        string FetchedAt,
+        string? SourceProvider,
+        string? RawText,
+        string? Category);
+
+    private record RefreshAllResult(string Message, int Refreshed);
+
+    private class CacheItemVm
+    {
+        public string StationId { get; set; } = "";
+        public DateTime ObservationTime { get; set; }
+        public DateTime FetchedAt { get; set; }
+        public string? SourceProvider { get; set; }
+        public string RawText { get; set; } = "";
+        public string Category { get; set; } = "Unknown";
+    }
+}

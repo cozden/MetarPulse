@@ -1,0 +1,263 @@
+@page "/logs"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+@implements IAsyncDisposable
+
+@inject IHttpClientFactory HttpFactory
+@inject ILogger<Logs> Logger
+
+<PageTitle>Log Görüntüleyici — MetarPulse Admin</PageTitle>
+
+<div class="mb-6 flex items-center justify-between">
+    <div>
+        <h1 class="text-xl font-bold text-base-content">Log Görüntüleyici</h1>
+        <p class="text-sm text-base-content/60 mt-1">API sunucusu gerçek zamanlı log akışı</p>
+    </div>
+    <div class="flex items-center gap-2">
+        <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" class="toggle toggle-success toggle-sm" @bind="_autoRefresh" @bind:after="OnAutoRefreshChanged" />
+            <span>Otomatik (@AutoRefreshSec sn)</span>
+        </label>
+        <button class="btn btn-sm btn-outline" @onclick="LoadAsync" disabled="@_loading">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Yenile
+        </button>
+        <button class="btn btn-sm btn-outline btn-warning" @onclick="ClearLogsAsync" disabled="@_busy">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Temizle
+        </button>
+    </div>
+</div>
+
+@* ── Filtreler ───────────────────────────────────────────────────────────── *@
+<div class="flex flex-wrap items-center gap-3 mb-4">
+    <select class="select select-bordered select-sm" @bind="_filterLevel" @bind:after="SearchAsync">
+        <option value="">Tüm Seviyeler</option>
+        <option value="ERR">ERROR</option>
+        <option value="WRN">WARNING</option>
+        <option value="INF">INFO</option>
+        <option value="DBG">DEBUG</option>
+    </select>
+
+    <input class="input input-bordered input-sm w-40"
+           placeholder="Kaynak filtrele..."
+           @bind="_filterSource"
+           @bind:event="oninput"
+           @onkeydown="OnKeyDown" />
+
+    <select class="select select-bordered select-sm" @bind="_limitStr" @bind:after="SearchAsync">
+        <option value="50">Son 50</option>
+        <option value="100">Son 100</option>
+        <option value="200">Son 200</option>
+        <option value="500">Son 500</option>
+    </select>
+
+    <button class="btn btn-sm btn-ghost" @onclick="ResetAsync">Sıfırla</button>
+
+    <span class="text-xs text-base-content/50 ml-auto">@_entries.Count kayıt gösteriliyor</span>
+</div>
+
+@* ── Log listesi ─────────────────────────────────────────────────────────── *@
+@if (_loading && _entries.Count == 0)
+{
+    <div class="flex items-center gap-3 text-base-content/60">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span>Yükleniyor...</span>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-error text-sm">
+        <span>@_error</span>
+        <button class="btn btn-sm btn-ghost ml-auto" @onclick="LoadAsync">Yeniden Dene</button>
+    </div>
+}
+else if (_entries.Count == 0)
+{
+    <div class="alert alert-info text-sm">
+        Log buffer boş. API çalışırken kayıtlar burada görünür.
+    </div>
+}
+else
+{
+    <div class="overflow-x-auto rounded-xl shadow-sm font-mono text-xs">
+        <table class="table table-zebra bg-base-100 w-full">
+            <thead>
+                <tr class="text-xs text-base-content/60 uppercase">
+                    <th class="w-36">Zaman</th>
+                    <th class="w-16">Level</th>
+                    <th class="w-32">Kaynak</th>
+                    <th>Mesaj</th>
+                    <th class="w-48">Hata</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in _entries)
+                {
+                    <tr class="hover @LevelRowClass(e.Level)">
+                        <td class="text-base-content/50 whitespace-nowrap">
+                            @e.Timestamp.ToString("dd.MM HH:mm:ss")
+                        </td>
+                        <td>
+                            <span class="badge badge-xs @LevelBadge(e.Level)">@e.Level</span>
+                        </td>
+                        <td class="text-base-content/60 truncate max-w-[120px]" title="@e.Source">
+                            @(e.Source ?? "—")
+                        </td>
+                        <td class="break-all">@e.Message</td>
+                        <td class="text-error/70 truncate max-w-[180px]" title="@e.Exception">
+                            @(e.Exception ?? "")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private const int AutoRefreshSec = 5;
+
+    private bool _loading = true;
+    private bool _busy = false;
+    private string? _error;
+
+    private string _filterLevel = "";
+    private string _filterSource = "";
+    private string _limitStr = "100";
+
+    private bool _autoRefresh = true;
+    private Timer? _timer;
+
+    private List<LogEntryVm> _entries = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        if (_autoRefresh) StartTimer();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var url = $"api/admin/logs?limit={_limitStr}";
+            if (!string.IsNullOrWhiteSpace(_filterLevel))  url += $"&level={Uri.EscapeDataString(_filterLevel)}";
+            if (!string.IsNullOrWhiteSpace(_filterSource)) url += $"&source={Uri.EscapeDataString(_filterSource)}";
+
+            var result = await http.GetFromJsonAsync<List<LogEntryDto>>(url);
+            _entries = result?.Select(d => new LogEntryVm
+            {
+                Timestamp = DateTime.Parse(d.Timestamp),
+                Level     = d.Level,
+                Message   = d.Message,
+                Source    = d.Source,
+                Exception = d.Exception
+            }).ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            Logger.LogError(ex, "Log listesi yüklenemedi");
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SearchAsync() => await LoadAsync();
+
+    private async Task ResetAsync()
+    {
+        _filterLevel = ""; _filterSource = ""; _limitStr = "100";
+        await LoadAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await LoadAsync();
+    }
+
+    private async Task ClearLogsAsync()
+    {
+        _busy = true;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            await http.DeleteAsync("api/admin/logs");
+            await LoadAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private void OnAutoRefreshChanged()
+    {
+        if (_autoRefresh) StartTimer();
+        else StopTimer();
+    }
+
+    private void StartTimer()
+    {
+        _timer ??= new Timer(async _ => await LoadAsync(), null,
+            TimeSpan.FromSeconds(AutoRefreshSec),
+            TimeSpan.FromSeconds(AutoRefreshSec));
+    }
+
+    private void StopTimer()
+    {
+        _timer?.Dispose();
+        _timer = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        StopTimer();
+        await Task.CompletedTask;
+    }
+
+    private static string LevelBadge(string level) => level switch
+    {
+        "ERR" or "FTL" => "badge-error",
+        "WRN"          => "badge-warning",
+        "INF"          => "badge-info",
+        _              => "badge-ghost"
+    };
+
+    private static string LevelRowClass(string level) => level switch
+    {
+        "ERR" or "FTL" => "bg-error/5",
+        "WRN"          => "bg-warning/5",
+        _              => ""
+    };
+
+    // ── DTO'lar ──────────────────────────────────────────────────────────────
+
+    private record LogEntryDto(
+        string Timestamp,
+        string Level,
+        string Message,
+        string? Source,
+        string? Exception);
+
+    private class LogEntryVm
+    {
+        public DateTime Timestamp { get; set; }
+        public string Level { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string? Source { get; set; }
+        public string? Exception { get; set; }
+    }
+}

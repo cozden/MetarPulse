@@ -21,6 +21,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     // NOTAM verileri
     public DbSet<Notam> Notams => Set<Notam>();
 
+    // Admin ayarları
+    public DbSet<ProviderSettingOverride> ProviderSettingOverrides => Set<ProviderSettingOverride>();
+
     // Kullanıcı verileri
     public DbSet<PilotProfile> PilotProfiles => Set<PilotProfile>();
     public DbSet<UserBookmark> UserBookmarks => Set<UserBookmark>();

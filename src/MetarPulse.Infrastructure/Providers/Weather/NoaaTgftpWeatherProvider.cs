@@ -73,6 +73,25 @@ public class NoaaTgftpWeatherProvider : BaseWeatherProvider
         }
     }
 
+    public override async Task<bool> HealthCheckAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            // NOAA TGFTP global meydanları barındırır; LTBU güvenilir test noktası
+            var metar = await GetMetarAsync("LTBU", ct);
+            if (metar != null) return true;
+
+            // Parse başarısız olsa bile sunucu yanıt veriyorsa sağlıklı say
+            var url = $"{Config.BaseUrl}/data/observations/metar/stations/LTBU.TXT";
+            var response = await GetWithResilienceAsync(url, ct);
+            return response != null && response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public override async Task<List<Metar>> GetMetarHistoryAsync(
         string icaoCode, int hours = 24, CancellationToken ct = default)
     {

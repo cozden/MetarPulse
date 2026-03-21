@@ -74,5 +74,26 @@ public class ProviderHealthController : ControllerBase
         return Ok();
     }
 
+    /// <summary>POST /api/providers/{name}/test — Provider'ı test et (LTBA METAR isteği)</summary>
+    [HttpPost("{name}/test")]
+    public async Task<IActionResult> TestProvider(string name, CancellationToken ct)
+    {
+        var provider = _manager.GetAllWeatherProviders()
+            .FirstOrDefault(p => p.ProviderName.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        if (provider == null)
+            return NotFound(new { message = $"Provider bulunamadı: {name}" });
+
+        try
+        {
+            var healthy = await provider.HealthCheckAsync(ct);
+            return Ok(new { success = healthy, message = healthy ? "Bağlantı başarılı" : "Sağlık kontrolü başarısız" });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { success = false, message = ex.Message });
+        }
+    }
+
     public record ProviderOrderRequest(List<string> GlobalOrder, List<string> TurkeyOrder);
 }

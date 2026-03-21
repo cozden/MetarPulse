@@ -16,9 +16,9 @@ public abstract class BaseWeatherProvider : IWeatherProvider
 {
     protected readonly HttpClient _http;
     protected readonly ILogger _logger;
-    private readonly ResiliencePipeline<HttpResponseMessage> _pipeline;
+    private ResiliencePipeline<HttpResponseMessage> _pipeline;
 
-    protected ProviderConfig Config { get; }
+    public ProviderConfig Config { get; private set; }
 
     public abstract string ProviderName { get; }
     public int Priority => Config.Priority;
@@ -35,6 +35,17 @@ public abstract class BaseWeatherProvider : IWeatherProvider
         _pipeline = BuildPipeline(config);
     }
 
+    /// <summary>
+    /// Admin panelinden yapılan değişiklikleri runtime'da uygular.
+    /// Polly pipeline yeniden inşa edilir.
+    /// </summary>
+    public void UpdateConfig(ProviderConfig newConfig)
+    {
+        Config = newConfig;
+        _pipeline = BuildPipeline(newConfig);
+        _logger.LogInformation("{Provider} ayarları güncellendi.", ProviderName);
+    }
+
     // ── IWeatherProvider ─────────────────────────────────────────────────────
 
     public abstract Task<Metar?> GetMetarAsync(string icaoCode, CancellationToken ct = default);
@@ -45,7 +56,7 @@ public abstract class BaseWeatherProvider : IWeatherProvider
     {
         try
         {
-            var metar = await GetMetarAsync("LTFM", ct);
+            var metar = await GetMetarAsync("LTBU", ct);
             return metar != null;
         }
         catch

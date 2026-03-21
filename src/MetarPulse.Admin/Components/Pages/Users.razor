@@ -1,0 +1,326 @@
+@page "/users"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+@inject IHttpClientFactory HttpFactory
+@inject ILogger<Users> Logger
+
+<PageTitle>Kullanıcı Yönetimi — MetarPulse Admin</PageTitle>
+
+<div class="mb-6">
+    <h1 class="text-xl font-bold text-base-content">Kullanıcı Yönetimi</h1>
+    <p class="text-sm text-base-content/60 mt-1">Kayıtlı kullanıcılar, roller ve hesap yönetimi</p>
+</div>
+
+@* ── Arama & Filtre ──────────────────────────────────────────────────────── *@
+<div class="flex items-center gap-3 mb-4">
+    <div class="flex-1">
+        <input class="input input-bordered input-sm w-full max-w-sm"
+               placeholder="E-posta veya isim ara..."
+               @bind="_search"
+               @bind:event="oninput"
+               @onkeydown="OnSearchKeyDown" />
+    </div>
+    <button class="btn btn-sm btn-primary" @onclick="SearchAsync" disabled="@_loading">Ara</button>
+    <button class="btn btn-sm btn-outline" @onclick="ResetAsync">Sıfırla</button>
+    <span class="text-xs text-base-content/50 ml-auto">
+        @if (_total > 0) { <text>Toplam @_total kullanıcı</text> }
+    </span>
+</div>
+
+@if (_loading)
+{
+    <div class="flex items-center gap-3 text-base-content/60">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span>Yükleniyor...</span>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-error text-sm mb-4">
+        <span>@_error</span>
+        <button class="btn btn-sm btn-ghost ml-auto" @onclick="LoadAsync">Yeniden Dene</button>
+    </div>
+}
+else
+{
+    <div class="overflow-x-auto rounded-xl shadow-sm">
+        <table class="table table-zebra bg-base-100 w-full">
+            <thead>
+                <tr class="text-xs text-base-content/60 uppercase">
+                    <th>E-posta</th>
+                    <th>İsim</th>
+                    <th>Rol</th>
+                    <th>Kayıt</th>
+                    <th>Son Giriş</th>
+                    <th>Onboarding</th>
+                    <th class="text-center">İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (_users.Count == 0)
+                {
+                    <tr>
+                        <td colspan="7" class="text-center text-base-content/40 py-8">Kullanıcı bulunamadı</td>
+                    </tr>
+                }
+                @foreach (var u in _users)
+                {
+                    <tr class="hover">
+                        <td class="text-sm font-mono">@u.Email</td>
+                        <td class="text-sm">@(u.DisplayName ?? "—")</td>
+                        <td>
+                            @foreach (var role in u.Roles)
+                            {
+                                <span class="badge @(role == "Admin" ? "badge-error" : "badge-info") badge-sm mr-1">@role</span>
+                            }
+                            @if (u.Roles.Count == 0)
+                            {
+                                <span class="text-xs text-base-content/40">—</span>
+                            }
+                        </td>
+                        <td class="text-xs text-base-content/50">@u.CreatedAt.ToString("dd.MM.yyyy")</td>
+                        <td class="text-xs text-base-content/50">
+                            @(u.LastLoginAt.HasValue ? u.LastLoginAt.Value.ToString("dd.MM HH:mm") : "—")
+                        </td>
+                        <td class="text-center">
+                            @if (u.IsOnboardingCompleted)
+                            {
+                                <span class="text-success text-sm">✓</span>
+                            }
+                            else
+                            {
+                                <span class="text-base-content/30 text-sm">—</span>
+                            }
+                        </td>
+                        <td class="text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                @if (u.Roles.Contains("Admin"))
+                                {
+                                    <button class="btn btn-xs btn-outline"
+                                            disabled="@_busy"
+                                            @onclick="() => SetRoleAsync(u.Id, false)"
+                                            title="User'a düşür">
+                                        → User
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-xs btn-outline btn-warning"
+                                            disabled="@_busy"
+                                            @onclick="() => SetRoleAsync(u.Id, true)"
+                                            title="Admin yap">
+                                        → Admin
+                                    </button>
+                                }
+                                <button class="btn btn-xs btn-outline btn-error"
+                                        disabled="@_busy"
+                                        @onclick="() => ConfirmDelete(u)"
+                                        title="Sil">
+                                    Sil
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @* ── Sayfalama ──────────────────────────────────────────────────────── *@
+    @if (_totalPages > 1)
+    {
+        <div class="flex items-center justify-center gap-2 mt-4">
+            <button class="btn btn-sm btn-ghost" disabled="@(_page <= 1 || _busy)" @onclick="PrevPage">←</button>
+            <span class="text-sm">@_page / @_totalPages</span>
+            <button class="btn btn-sm btn-ghost" disabled="@(_page >= _totalPages || _busy)" @onclick="NextPage">→</button>
+        </div>
+    }
+}
+
+@* ── Status mesajı ───────────────────────────────────────────────────────── *@
+@if (_statusMessage is not null)
+{
+    <div class="alert @(_statusIsError ? "alert-error" : "alert-success") text-sm mt-4">
+        @_statusMessage
+    </div>
+}
+
+@* ── Silme onay modal ────────────────────────────────────────────────────── *@
+@if (_deleteTarget is not null)
+{
+    <div class="modal modal-open">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg">Kullanıcı Sil</h3>
+            <p class="py-4 text-sm">
+                <span class="font-mono text-error">@_deleteTarget.Email</span> adlı kullanıcı silinecek. Emin misiniz?
+            </p>
+            <div class="modal-action">
+                <button class="btn btn-sm btn-ghost" @onclick="() => _deleteTarget = null">İptal</button>
+                <button class="btn btn-sm btn-error" @onclick="ExecuteDeleteAsync" disabled="@_busy">Sil</button>
+            </div>
+        </div>
+        <div class="modal-backdrop" @onclick="() => _deleteTarget = null"></div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _busy = false;
+    private string? _error;
+    private string? _statusMessage;
+    private bool _statusIsError;
+
+    private string _search = "";
+    private int _page = 1;
+    private const int PageSize = 20;
+    private int _total;
+    private int _totalPages => (int)Math.Ceiling(_total / (double)PageSize);
+
+    private List<UserVm> _users = [];
+    private UserVm? _deleteTarget;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var url = $"api/admin/users?page={_page}&pageSize={PageSize}" +
+                      (string.IsNullOrWhiteSpace(_search) ? "" : $"&search={Uri.EscapeDataString(_search)}");
+
+            var result = await http.GetFromJsonAsync<PagedResult>(url);
+            _total = result?.Total ?? 0;
+            _users = result?.Items.Select(i => new UserVm
+            {
+                Id = i.Id,
+                Email = i.Email ?? "",
+                DisplayName = i.DisplayName,
+                Roles = i.Roles?.ToList() ?? [],
+                CreatedAt = i.CreatedAt,
+                LastLoginAt = i.LastLoginAt,
+                IsOnboardingCompleted = i.IsOnboardingCompleted
+            }).ToList() ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = $"API hatası: {ex.Message}";
+            Logger.LogError(ex, "Kullanıcı listesi yüklenemedi");
+        }
+        finally { _loading = false; }
+    }
+
+    private async Task SearchAsync()
+    {
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ResetAsync()
+    {
+        _search = "";
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SearchAsync();
+    }
+
+    private async Task PrevPage()
+    {
+        if (_page > 1) { _page--; await LoadAsync(); }
+    }
+
+    private async Task NextPage()
+    {
+        if (_page < _totalPages) { _page++; await LoadAsync(); }
+    }
+
+    private async Task SetRoleAsync(string userId, bool makeAdmin)
+    {
+        var role = makeAdmin ? "Admin" : "User";
+        _busy = true;
+        _statusMessage = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.PutAsync(
+                $"api/admin/users/{Uri.EscapeDataString(userId)}/role?role={role}", null);
+
+            if (resp.IsSuccessStatusCode)
+            {
+                ShowStatus($"Rol güncellendi → {role}", false);
+                await LoadAsync();
+            }
+            else
+            {
+                ShowStatus($"Hata: {resp.StatusCode}", true);
+            }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ConfirmDelete(UserVm u) => _deleteTarget = u;
+
+    private async Task ExecuteDeleteAsync()
+    {
+        if (_deleteTarget is null) return;
+        _busy = true;
+        _statusMessage = null;
+        var target = _deleteTarget;
+        _deleteTarget = null;
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var resp = await http.DeleteAsync($"api/admin/users/{Uri.EscapeDataString(target.Id)}");
+            if (resp.IsSuccessStatusCode)
+            {
+                ShowStatus($"{target.Email} silindi", false);
+                await LoadAsync();
+            }
+            else
+            {
+                ShowStatus($"Silme başarısız: {resp.StatusCode}", true);
+            }
+        }
+        catch (Exception ex) { ShowStatus(ex.Message, true); }
+        finally { _busy = false; }
+    }
+
+    private void ShowStatus(string msg, bool isError)
+    {
+        _statusMessage = msg;
+        _statusIsError = isError;
+    }
+
+    // ── DTO'lar ──────────────────────────────────────────────────────────────
+
+    private record PagedResult(int Total, int Page, int PageSize, List<UserDto> Items);
+
+    private record UserDto(
+        string Id,
+        string? Email,
+        string? DisplayName,
+        DateTime CreatedAt,
+        DateTime? LastLoginAt,
+        bool IsOnboardingCompleted,
+        List<string>? Roles);
+
+    private class UserVm
+    {
+        public string Id { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string? DisplayName { get; set; }
+        public List<string> Roles { get; set; } = [];
+        public DateTime CreatedAt { get; set; }
+        public DateTime? LastLoginAt { get; set; }
+        public bool IsOnboardingCompleted { get; set; }
+    }
+}

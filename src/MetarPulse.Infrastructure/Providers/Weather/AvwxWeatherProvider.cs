@@ -76,4 +76,24 @@ public class AvwxWeatherProvider : BaseWeatherProvider
         var metar = await GetMetarAsync(icaoCode, ct);
         return metar != null ? [metar] : [];
     }
+
+    public override async Task<bool> HealthCheckAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var url = $"{Config.BaseUrl}/metar/LTBU?options=summary";
+            var response = await GetWithResilienceAsync(url, ct);
+            _logger.LogInformation("AVWX health check → status={Status} apiKeySet={HasKey}",
+                response?.StatusCode.ToString() ?? "null",
+                !string.IsNullOrEmpty(Config.ApiKey));
+            if (response == null || !response.IsSuccessStatusCode) return false;
+            var json = await response.Content.ReadAsStringAsync(ct);
+            return json.Contains("\"raw\"");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AVWX health check exception");
+            return false;
+        }
+    }
 }

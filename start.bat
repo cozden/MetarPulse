@@ -15,7 +15,7 @@ if "%MODE%"=="2" goto DOCKER
 
 :DEV
 echo.
-echo [1/5] Starting PostgreSQL (Docker)...
+echo [1/6] Starting PostgreSQL (Docker)...
 docker compose up -d postgres
 if %ERRORLEVEL% NEQ 0 (
     echo ERROR: Docker Compose failed. Is Docker Desktop running?
@@ -33,14 +33,18 @@ if %ERRORLEVEL% NEQ 0 (
 echo PostgreSQL is ready.
 
 echo.
-echo [2/5] Starting API Project...
+echo [2/6] Starting API Project...
 start "MetarPulse API" cmd /k "cd /d %~dp0src\MetarPulse.Api && dotnet run --launch-profile http"
 
 echo Waiting for API to initialize...
 timeout /t 5 /nobreak >NUL
 
 echo.
-echo [3/5] Starting ngrok tunnel (port 5000)...
+echo [3/6] Starting Admin Panel...
+start "MetarPulse Admin" cmd /k "cd /d %~dp0src\MetarPulse.Admin && dotnet run --launch-profile http"
+
+echo.
+echo [4/6] Starting ngrok tunnel (port 5000)...
 where ngrok >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo WARNING: ngrok not found in PATH. Skipping tunnel.
@@ -51,17 +55,18 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo [4/5] Starting Web Project...
+echo [5/6] Starting Web Project...
 start "MetarPulse Web" cmd /k "cd /d %~dp0src\MetarPulse.Web && dotnet run --launch-profile http"
 
 echo.
-echo [5/5] Starting MAUI Project (Windows)...
+echo [6/6] Starting MAUI Project (Windows)...
 start "MetarPulse MAUI" cmd /k "cd /d %~dp0src\MetarPulse.Maui && dotnet build -t:Run -f net10.0-windows10.0.19041.0"
 
 echo.
 echo ==========================================
 echo  PostgreSQL : localhost:5432
 echo  API        : http://localhost:5000
+echo  Admin      : http://localhost:5225
 echo  Web        : http://localhost:5269
 echo  ngrok      : https://gulflike-yosef-unsequenced.ngrok-free.dev
 echo ==========================================
@@ -97,6 +102,7 @@ echo.
 echo ==========================================
 echo  PostgreSQL : localhost:5432
 echo  API        : http://localhost:5000
+echo  Admin      : http://localhost:5080
 echo  Web        : http://localhost:8080
 echo  ngrok      : https://gulflike-yosef-unsequenced.ngrok-free.dev
 echo.
