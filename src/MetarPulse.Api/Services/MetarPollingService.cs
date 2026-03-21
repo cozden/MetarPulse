@@ -205,9 +205,20 @@ public class MetarPollingService : BackgroundService
                         continue;
                     }
 
-                    // DB'ye kaydet
+                    // DB'ye kaydet — unique constraint (StationId, ObservationTime) koruması
                     await metarRepo.AddAsync(fresh, ct);
-                    await db.SaveChangesAsync(ct);
+                    try
+                    {
+                        await db.SaveChangesAsync(ct);
+                    }
+                    catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("duplicate key") == true
+                                                    || ex.InnerException?.Message.Contains("unique") == true)
+                    {
+                        // Aynı ObservationTime zaten DB'de — race condition, sessizce geç
+                        db.ChangeTracker.Clear();
+                        _logger.LogDebug("{ICAO} duplicate METAR ({ObsTime:HH:mm}Z) — atlandı.", icao, fresh.ObservationTime);
+                        continue;
+                    }
 
                     // Bu döngüde yeni METAR alındı — bir sonraki kontrolde normal aralığa geç
                     _newMetarReceivedAt[icao] = DateTime.UtcNow;

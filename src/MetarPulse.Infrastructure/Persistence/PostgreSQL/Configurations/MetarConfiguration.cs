@@ -13,7 +13,7 @@ public class MetarConfiguration : IEntityTypeConfiguration<Metar>
 
         builder.HasIndex(m => m.StationId);
         builder.HasIndex(m => m.ObservationTime);
-        builder.HasIndex(m => new { m.StationId, m.ObservationTime });
+        builder.HasIndex(m => new { m.StationId, m.ObservationTime }).IsUnique();
 
         builder.Property(m => m.StationId).HasMaxLength(10).IsRequired();
         builder.Property(m => m.RawText).HasMaxLength(500).IsRequired();

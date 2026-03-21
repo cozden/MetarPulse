@@ -360,7 +360,8 @@ namespace MetarPulse.Infrastructure.Persistence.PostgreSQL.Migrations
 
                     b.HasIndex("StationId");
 
-                    b.HasIndex("StationId", "ObservationTime");
+                    b.HasIndex("StationId", "ObservationTime")
+                        .IsUnique();
 
                     b.ToTable("metar_history", (string)null);
                 });
