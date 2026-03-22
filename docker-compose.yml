@@ -69,6 +69,8 @@ services:
       ConnectionStrings__PostgreSQL: "Host=postgres;Port=5432;Database=metarpulse;Username=app;Password=${POSTGRES_PASSWORD:-devpass123}"
       Admin__ApiBaseUrl: "http://api:5000"
       Admin__InternalApiKey: "${ADMIN_INTERNAL_API_KEY:-mp-admin-k3y-d3v-s3cr3t-2026}"
+    volumes:
+      - admin-dataprotection:/app/dataprotection-keys
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,3 +90,4 @@ services:
 
 volumes:
   pgdata:
+  admin-dataprotection:

@@ -1,5 +1,5 @@
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.103 AS build
 WORKDIR /src
 
 COPY ["src/MetarPulse.Admin/MetarPulse.Admin.csproj",             "src/MetarPulse.Admin/"]
@@ -10,7 +10,7 @@ RUN dotnet restore "src/MetarPulse.Admin/MetarPulse.Admin.csproj"
 
 COPY . .
 RUN dotnet publish "src/MetarPulse.Admin/MetarPulse.Admin.csproj" \
-    -c Release -o /app/publish --no-restore
+    -c Release -o /app/publish
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

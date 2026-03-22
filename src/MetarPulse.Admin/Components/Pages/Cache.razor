@@ -1,6 +1,5 @@
 @page "/cache"
 @attribute [Authorize(Roles = "Admin")]
-@rendermode InteractiveServer
 
 @inject IHttpClientFactory HttpFactory
 @inject ILogger<Cache> Logger
@@ -105,16 +104,16 @@ else
                         <td class="text-xs">
                             <span class="badge badge-ghost badge-xs">@(item.SourceProvider ?? "?")</span>
                         </td>
-                        <td class="text-xs font-mono max-w-[300px]">
+                        <td class="text-xs font-mono" style="max-width:320px; word-break:break-all;">
                             @if (_expandedIds.Contains(item.StationId))
                             {
-                                <div class="whitespace-pre-wrap break-all text-base-content/70">@item.RawText</div>
+                                <div class="text-base-content/70 leading-relaxed">@item.RawText</div>
                                 <button class="btn btn-xs btn-ghost mt-1" @onclick="() => ToggleExpand(item.StationId)">▲ Daralt</button>
                             }
                             else
                             {
-                                <span class="truncate block max-w-[250px] text-base-content/50" title="@item.RawText">
-                                    @(item.RawText.Length > 40 ? item.RawText[..40] + "…" : item.RawText)
+                                <span class="text-base-content/50" title="@item.RawText">
+                                    @(item.RawText.Length > 45 ? item.RawText[..45] + "…" : item.RawText)
                                 </span>
                                 <button class="btn btn-xs btn-ghost" @onclick="() => ToggleExpand(item.StationId)">▼ Göster</button>
                             }
@@ -248,6 +247,7 @@ else
     private void ToggleExpand(string icao)
     {
         if (!_expandedIds.Remove(icao)) _expandedIds.Add(icao);
+        StateHasChanged();
     }
 
     private async Task RefreshStationAsync(string icao)

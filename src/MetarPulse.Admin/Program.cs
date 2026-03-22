@@ -2,13 +2,20 @@ using MetarPulse.Admin.Components;
 using MetarPulse.Core.Models;
 using MetarPulse.Infrastructure.Configuration;
 using MetarPulse.Infrastructure.Persistence.PostgreSQL;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ─── Data Protection (Docker container rebuild'lerde session korunması) ────
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo("/app/dataprotection-keys"))
+    .SetApplicationName("MetarPulse.Admin");
+
 // ─── Blazor Server ─────────────────────────────────────────────────────────
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents()
+    .AddCircuitOptions(o => o.DetailedErrors = true);
 
 // ─── Veritabanı (PostgreSQL + Repository'ler) ──────────────────────────────
 builder.Services.AddPostgreSqlDatabase(builder.Configuration);
@@ -57,14 +64,14 @@ var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/error", createScopeForErrors: true);
-    app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// HTTPS redirect yok — Docker HTTP ortamında Blazor SignalR WebSocket'i bozuyor
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+app.UseStaticFiles();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
