@@ -59,7 +59,10 @@ public class MetarController : ControllerBase
         var fresh = await _provider.GetMetarWithFallbackAsync(icao, ct);
         if (fresh != null)
         {
-            await _metarRepo.AddAsync(fresh, ct);
+            if (cached != null && cached.ObservationTime == fresh.ObservationTime)
+                cached.FetchedAt = fresh.FetchedAt;
+            else
+                await _metarRepo.AddAsync(fresh, ct);
             await _db.SaveChangesAsync(ct);
 
             // SignalR push
@@ -158,7 +161,10 @@ public class MetarController : ControllerBase
         if (fresh == null)
             return StatusCode(503, new { message = $"Provider'dan veri alınamadı: {icao}" });
 
-        await _metarRepo.AddAsync(fresh, ct);
+        if (previous != null && previous.ObservationTime == fresh.ObservationTime)
+            previous.FetchedAt = fresh.FetchedAt;
+        else
+            await _metarRepo.AddAsync(fresh, ct);
         await _db.SaveChangesAsync(ct);
 
         MetarPulse.Core.Models.MetarComparison? diff = null;
@@ -218,7 +224,16 @@ public class MetarController : ControllerBase
             {
                 if (fetchedArr[i] is { } fresh)
                 {
-                    await _metarRepo.AddAsync(fresh, ct);
+                    // Aynı gözlem zamanı zaten varsa sadece FetchedAt güncelle (duplicate key önle)
+                    if (byIcao.TryGetValue(staleCodes[i], out var existing) &&
+                        existing.ObservationTime == fresh.ObservationTime)
+                    {
+                        existing.FetchedAt = fresh.FetchedAt;
+                    }
+                    else
+                    {
+                        await _metarRepo.AddAsync(fresh, ct);
+                    }
                     byIcao[staleCodes[i]] = fresh;
                 }
             }

@@ -145,6 +145,34 @@ public class AdminController : ControllerBase
         return Ok(new { message = $"{user.Email} → {role}" });
     }
 
+    /// <summary>PUT /api/admin/users/{id} — İsim ve/veya şifre güncelle</summary>
+    [HttpPut("users/{id}")]
+    public async Task<IActionResult> UpdateUser(string id, [FromBody] UpdateUserRequest req)
+    {
+        var user = await _users.FindByIdAsync(id);
+        if (user == null || user.IsDeleted)
+            return NotFound(new { message = "Kullanıcı bulunamadı" });
+
+        if (req.DisplayName is not null)
+            user.DisplayName = req.DisplayName.Trim();
+
+        var updateResult = await _users.UpdateAsync(user);
+        if (!updateResult.Succeeded)
+            return BadRequest(new { message = string.Join(", ", updateResult.Errors.Select(e => e.Description)) });
+
+        if (!string.IsNullOrWhiteSpace(req.NewPassword))
+        {
+            await _users.RemovePasswordAsync(user);
+            var passResult = await _users.AddPasswordAsync(user, req.NewPassword);
+            if (!passResult.Succeeded)
+                return BadRequest(new { message = string.Join(", ", passResult.Errors.Select(e => e.Description)) });
+        }
+
+        return Ok(new { message = $"{user.Email} güncellendi" });
+    }
+
+    public record UpdateUserRequest(string? DisplayName, string? NewPassword);
+
     /// <summary>DELETE /api/admin/users/{id} — Kullanıcıyı soft-delete</summary>
     [HttpDelete("users/{id}")]
     public async Task<IActionResult> DeleteUser(string id)
