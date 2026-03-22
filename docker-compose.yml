@@ -34,6 +34,7 @@ services:
       Jwt__SecretKey: "${JWT_SECRET:-CHANGE_ME_STRONG_SECRET_MIN_32_CHARACTERS_HERE!}"
       Jwt__Issuer: MetarPulse
       Jwt__Audience: MetarPulseApp
+      Admin__InternalApiKey: "${ADMIN_INTERNAL_API_KEY:-mp-admin-k3y-d3v-s3cr3t-2026}"
       # İsteğe bağlı: hava durumu API anahtarları
       # WeatherProviders__Providers__AVWX__ApiKey: ""
       # WeatherProviders__Providers__CheckWX__ApiKey: ""
