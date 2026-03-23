@@ -146,8 +146,13 @@ public static class NotamVfrClassifier
     /// <summary>
     /// Q-kodu subject ve traffic kodlarından VFR etkisini hesaplar.
     /// IFR-only NOTAM'lar VFR etkisi taşımaz (Advisory'ye düşürülür).
+    /// rawText verilirse OperationsCritical tespiti için metin analizi de yapılır.
     /// </summary>
-    public static NotamVfrImpact Classify(string subject, NotamTraffic traffic, NotamScope scope)
+    public static NotamVfrImpact Classify(
+        string subject,
+        NotamTraffic traffic,
+        NotamScope scope,
+        string rawText = "")
     {
         // Sadece IFR trafiği etkileyen NOTAM'lar VFR'yi etkilemez
         if (traffic == NotamTraffic.Ifr && scope == NotamScope.EnRoute)
@@ -164,9 +169,81 @@ public static class NotamVfrClassifier
             if (traffic == NotamTraffic.Ifr && impact > NotamVfrImpact.Advisory)
                 return NotamVfrImpact.Advisory;
 
+            // Warning seviyesindeyse, metin analizi ile OperationsCritical olabilir
+            if (impact >= NotamVfrImpact.Warning && !string.IsNullOrWhiteSpace(rawText))
+            {
+                if (IsOperationsCritical(key, rawText))
+                    return NotamVfrImpact.OperationsCritical;
+            }
+
             return impact;
         }
 
+        // Metin analizi fallback — subject eşleşmese bile kritik kelimeler varsa
+        if (!string.IsNullOrWhiteSpace(rawText) && IsOperationsCritical(key, rawText))
+            return NotamVfrImpact.OperationsCritical;
+
         return NotamVfrImpact.Advisory;
+    }
+
+    /// <summary>
+    /// Uçuş operasyonlarını doğrudan kapatan NOTAM mı? (OPS KISITMASI)
+    /// — Havaalanı kapalı (AD CLSD)
+    /// — Pist kapalı (RWY CLSD)
+    /// — IHA/UAV/UHA operasyonları hava sahasını kapatan kısıtlama
+    /// — Tüm uçuş operasyonlarını askıya alan kararlar
+    /// </summary>
+    private static bool IsOperationsCritical(string subjectKey, string rawText)
+    {
+        var t = rawText.ToUpperInvariant();
+
+        // ── Havaalanı kapalı ─────────────────────────────────────────────────
+        if (subjectKey is "FA" or "AD")
+        {
+            if (t.Contains("AD CLSD") || t.Contains("CLSD TO") ||
+                t.Contains("NOT AVBL") || t.Contains("OPS SUSPENDED") ||
+                t.Contains("ACFT OPS SUS") || t.Contains("SUSPENDED FOR ACFT") ||
+                t.Contains("AIRPORT CLOSED") || t.Contains("AD CLOSED"))
+                return true;
+        }
+
+        // ── Pist kapalı ──────────────────────────────────────────────────────
+        if (subjectKey == "RW")
+        {
+            if (t.Contains("CLSD") || t.Contains("CLOSED") || t.Contains("NOT AVBL"))
+                return true;
+        }
+
+        // ── IHA / UAV / UAS / Drone kısıtlaması ──────────────────────────────
+        // Türkiye formatı: "IHA" / "UHA"; ICAO: "UAV" / "UAS" / "RPAS"
+        bool hasDroneKeyword =
+            t.Contains("IHA") || t.Contains(" UHA") || t.Contains("(UHA)") ||
+            t.Contains(" UAV") || t.Contains("(UAV)") ||
+            t.Contains(" UAS") || t.Contains("(UAS)") ||
+            t.Contains("RPAS") || t.Contains("DRONE");
+
+        if (hasDroneKeyword)
+        {
+            // Kısıtlama niteliğini taşıması gerekiyor
+            if (t.Contains("PROHIBITED") || t.Contains("CLSD") || t.Contains("RESTRICTED") ||
+                t.Contains("NOT AVBL") || t.Contains("FORBID") || t.Contains("YASAK"))
+                return true;
+        }
+
+        // ── Genel operasyon yasağı cümleleri ─────────────────────────────────
+        if (t.Contains("ALL ACFT OPS") || t.Contains("FLT OPS SUS") ||
+            t.Contains("NO FLT") || t.Contains("ACFT NOT PERMITTED") ||
+            t.Contains("ACFT MVMT PROHIBITED") || t.Contains("ACFT OPS PROHIBITED"))
+            return true;
+
+        // ── Hava sahası yasağı / kısıtlaması (aerodrome kapsamlı) ────────────
+        if (subjectKey is "AQ" or "AP")   // Prohibited / Entry prohibited
+        {
+            // SFC'den başlayan (yüzeyden itibaren) yasak → kalkış/inis imkansız
+            if (t.Contains("SFC") || t.Contains("GND") || t.Contains("0FT"))
+                return true;
+        }
+
+        return false;
     }
 }

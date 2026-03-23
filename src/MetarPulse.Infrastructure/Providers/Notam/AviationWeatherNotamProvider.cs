@@ -152,7 +152,7 @@ public class AviationWeatherNotamProvider : INotamProvider
             if (el.TryGetProperty("radius", out var radEl) && radEl.TryGetInt32(out var radI)) radius = radI;
 
             // VFR etkisi hesapla
-            var vfrImpact = NotamVfrClassifier.Classify(subject, traffic, scope);
+            var vfrImpact = NotamVfrClassifier.Classify(subject, traffic, scope, rawText);
 
             // Tip
             var typeStr = el.TryGet("type") ?? "N";

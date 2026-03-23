@@ -34,10 +34,16 @@
 
 @* ── Filtreler ────────────────────────────────────────────────────────────── *@
 <div class="flex gap-2 mb-3 flex-wrap">
-    <button class="btn btn-xs @(_filter == "all"      ? "btn-primary" : "btn-ghost")" @onclick='() => SetFilter("all")'>Tümü (@_notams.Count)</button>
-    <button class="btn btn-xs @(_filter == "Warning"  ? "btn-error"   : "btn-ghost")" @onclick='() => SetFilter("Warning")'>Uyarı (@_notams.Count(n => n.VfrImpact == "Warning"))</button>
-    <button class="btn btn-xs @(_filter == "Caution"  ? "btn-warning" : "btn-ghost")" @onclick='() => SetFilter("Caution")'>Dikkat (@_notams.Count(n => n.VfrImpact == "Caution"))</button>
-    <button class="btn btn-xs @(_filter == "Advisory" ? "btn-info"    : "btn-ghost")" @onclick='() => SetFilter("Advisory")'>Bilgi (@_notams.Count(n => n.VfrImpact == "Advisory"))</button>
+    <button class="btn btn-xs @(_filter == "all"                  ? "btn-primary"   : "btn-ghost")" @onclick='() => SetFilter("all")'>Tümü (@_notams.Count)</button>
+    @if (_notams.Any(n => n.VfrImpact == "OperationsCritical"))
+    {
+        <button class="btn btn-xs @(_filter == "OperationsCritical" ? "btn-error animate-pulse" : "btn-ghost text-error")" @onclick='() => SetFilter("OperationsCritical")'>
+            OPS KISITMASI (@_notams.Count(n => n.VfrImpact == "OperationsCritical"))
+        </button>
+    }
+    <button class="btn btn-xs @(_filter == "Warning"              ? "btn-error"     : "btn-ghost")" @onclick='() => SetFilter("Warning")'>Uyarı (@_notams.Count(n => n.VfrImpact == "Warning"))</button>
+    <button class="btn btn-xs @(_filter == "Caution"              ? "btn-warning"   : "btn-ghost")" @onclick='() => SetFilter("Caution")'>Dikkat (@_notams.Count(n => n.VfrImpact == "Caution"))</button>
+    <button class="btn btn-xs @(_filter == "Advisory"             ? "btn-info"      : "btn-ghost")" @onclick='() => SetFilter("Advisory")'>Bilgi (@_notams.Count(n => n.VfrImpact == "Advisory"))</button>
 </div>
 
 @* ── İçerik ───────────────────────────────────────────────────────────────── *@
@@ -161,10 +167,11 @@ else
 
     private static string ImpactBadgeCss(string impact) => impact switch
     {
-        "Warning"  => "badge-error",
-        "Caution"  => "badge-warning",
-        "Advisory" => "badge-info",
-        _          => "badge-ghost"
+        "OperationsCritical" => "badge-error animate-pulse",
+        "Warning"            => "badge-error",
+        "Caution"            => "badge-warning",
+        "Advisory"           => "badge-info",
+        _                    => "badge-ghost"
     };
 
     private static string ValidityText(NotamDto n)

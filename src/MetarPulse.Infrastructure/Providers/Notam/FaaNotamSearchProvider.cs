@@ -175,7 +175,7 @@ public class FaaNotamSearchProvider : INotamProvider
             }
 
             // VFR etkisi
-            var vfrImpact = NotamVfrClassifier.Classify(subject, traffic, scope);
+            var vfrImpact = NotamVfrClassifier.Classify(subject, traffic, scope, icaoMsg);
 
             // Seri & numara
             ParseNotamId(notamNumber, out var series, out var number, out var year);

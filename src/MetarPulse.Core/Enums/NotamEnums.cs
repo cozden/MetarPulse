@@ -3,10 +3,11 @@ namespace MetarPulse.Core.Enums;
 /// <summary>VFR operasyonlarına etkisi — Q-kodu subject/traffic'ten hesaplanır.</summary>
 public enum NotamVfrImpact
 {
-    None      = 0,  // VFR'yi etkilemiyor veya yalnızca IFR için
-    Advisory  = 1,  // Bilgi amaçlı (NAV, COM vb.)
-    Caution   = 2,  // Dikkat (aydınlatma, küçük kısıtlamalar)
-    Warning   = 3   // Uyarı (pist kapalı, engel, büyük airspace kısıtlaması)
+    None               = 0,  // VFR'yi etkilemiyor veya yalnızca IFR için
+    Advisory           = 1,  // Bilgi amaçlı (NAV, COM vb.)
+    Caution            = 2,  // Dikkat (aydınlatma, küçük kısıtlamalar)
+    Warning            = 3,  // Uyarı (pist kapalı, engel, büyük airspace kısıtlaması)
+    OperationsCritical = 4   // OPS KISITMASI — havaalanı kapalı, pist CLSD, IHA yasağı, tüm operasyonları durduran kısıtlama
 }
 
 /// <summary>NOTAM Q-kodundan parse edilen trafik tipi.</summary>
