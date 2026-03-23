@@ -22,7 +22,14 @@ public static class ProviderRegistration
             configuration.GetSection("AirportDataProviders").Bind(options));
 
         // Named HttpClient'lar — her provider kendi timeout/header yapılandırmasına sahip
-        services.AddHttpClient("MGM_RASAT");
+        // MGM Hezarfen Rasat: Next.js SSR sayfası, browser User-Agent gerekli
+        services.AddHttpClient("MGM_RASAT", client =>
+        {
+            client.DefaultRequestHeaders.Add("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            client.DefaultRequestHeaders.Add("Accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+        });
         services.AddHttpClient("AVWX");
         services.AddHttpClient("CheckWX");
         services.AddHttpClient("AWC");

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MetarPulse.Abstractions.Providers;
 using MetarPulse.Core.Models;
 using MetarPulse.Core.Services;
@@ -8,9 +9,11 @@ using Microsoft.Extensions.Options;
 namespace MetarPulse.Infrastructure.Providers.Weather;
 
 /// <summary>
-/// MGM Rasat METAR servisi — Türkiye meydanları için birincil kaynak.
-/// LT* prefix'li ICAO kodları için öncelikli olarak kullanılır (~0-1dk gecikme).
-/// Endpoint: GET {BaseUrl}/api/aviation/metar/{ICAO}
+/// MGM Hezarfen Rasat — Türkiye meydanları için birincil kaynak.
+/// LT* prefix'li ICAO kodları için öncelikli kullanılır.
+/// Endpoint: GET {BaseUrl}/result?stations={ICAO}&amp;obsType=1&amp;obsType=2&amp;hours=0
+/// __NEXT_DATA__ JSON bloğundan METAR/TAF ham metni çıkarılır.
+/// observationType: 4=METAR/SPECI, 6=TAF
 /// </summary>
 public class MgmRasatWeatherProvider : BaseWeatherProvider
 {
@@ -35,15 +38,10 @@ public class MgmRasatWeatherProvider : BaseWeatherProvider
             return null;
         }
 
-        var url = $"{Config.BaseUrl}/api/aviation/metar/{icaoCode.ToUpper()}";
-        var response = await GetWithResilienceAsync(url, ct);
-        if (response == null || !response.IsSuccessStatusCode) return null;
-
         try
         {
-            var json = await response.Content.ReadAsStringAsync(ct);
-            var raw = ExtractRawMetar(json, icaoCode);
-            return raw != null ? MetarParser.Parse(raw, ProviderName) : null;
+            var (metar, _) = await FetchLatestAsync(icaoCode, ct);
+            return metar != null ? MetarParser.Parse(metar, ProviderName) : null;
         }
         catch (Exception ex)
         {
@@ -56,15 +54,10 @@ public class MgmRasatWeatherProvider : BaseWeatherProvider
     {
         if (!IsTurkishStation(icaoCode)) return null;
 
-        var url = $"{Config.BaseUrl}/api/aviation/taf/{icaoCode.ToUpper()}";
-        var response = await GetWithResilienceAsync(url, ct);
-        if (response == null || !response.IsSuccessStatusCode) return null;
-
         try
         {
-            var json = await response.Content.ReadAsStringAsync(ct);
-            var raw = ExtractRawTaf(json, icaoCode);
-            return raw != null ? TafParser.Parse(raw, ProviderName) : null;
+            var (_, taf) = await FetchLatestAsync(icaoCode, ct);
+            return taf != null ? TafParser.Parse(taf, ProviderName) : null;
         }
         catch (Exception ex)
         {
@@ -78,26 +71,27 @@ public class MgmRasatWeatherProvider : BaseWeatherProvider
     {
         if (!IsTurkishStation(icaoCode)) return [];
 
-        var url = $"{Config.BaseUrl}/api/aviation/metar/{icaoCode.ToUpper()}/history?hours={hours}";
-        var response = await GetWithResilienceAsync(url, ct);
-        if (response == null || !response.IsSuccessStatusCode)
-        {
-            // Geçmiş endpoint yoksa mevcut METAR'ı dön
-            var current = await GetMetarAsync(icaoCode, ct);
-            return current != null ? [current] : [];
-        }
-
+        // Hezarfen geçmişi hours parametresiyle destekliyor
         try
         {
-            var json = await response.Content.ReadAsStringAsync(ct);
-            return ExtractRawMetarList(json)
+            var url = $"{Config.BaseUrl}/result?stations={icaoCode.ToUpper()}&obsType=1&hours={hours}";
+            var response = await GetWithResilienceAsync(url, ct);
+            if (response == null || !response.IsSuccessStatusCode) return [];
+
+            var html = await response.Content.ReadAsStringAsync(ct);
+            var items = ExtractDataLastItems(html);
+
+            return items
+                .Where(x => x.Type is 4 or 5)           // 4=METAR, 5=SPECI
+                .Select(x => x.Text)
                 .Select(raw => MetarParser.Parse(raw, ProviderName))
                 .ToList();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "MGM_RASAT geçmiş parse hatası: {ICAO}", icaoCode);
-            return [];
+            var current = await GetMetarAsync(icaoCode, ct);
+            return current != null ? [current] : [];
         }
     }
 
@@ -105,14 +99,8 @@ public class MgmRasatWeatherProvider : BaseWeatherProvider
     {
         try
         {
-            // Önce LTFM ile gerçek veri dene
             var metar = await GetMetarAsync("LTFM", ct);
-            if (metar != null) return true;
-
-            // METAR null geldiyse endpoint'in erişilebilir olup olmadığını kontrol et
-            var response = await GetWithResilienceAsync($"{Config.BaseUrl}/api/aviation/metar/LTFM", ct);
-            // 200, 404, 400 → sunucu yanıt veriyor demektir; null → bağlantı yok
-            return response != null;
+            return metar != null;
         }
         catch
         {
@@ -126,91 +114,67 @@ public class MgmRasatWeatherProvider : BaseWeatherProvider
         => icaoCode.Length >= 2 && icaoCode.StartsWith("LT", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// MGM API yanıtından ham METAR metnini çıkarır.
-    /// Beklenen format: { "metar": "METAR LTFM ..." } veya düz metin
+    /// Tek HTTP isteğiyle hem METAR hem TAF metnini döner.
     /// </summary>
-    private static string? ExtractRawMetar(string json, string icaoCode)
+    private async Task<(string? MetarRaw, string? TafRaw)> FetchLatestAsync(
+        string icaoCode, CancellationToken ct)
     {
-        // Düz metin yanıt (ham METAR içeriyorsa)
-        var trimmed = json.Trim().Trim('"');
-        if (trimmed.StartsWith("METAR", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("SPECI", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith(icaoCode.ToUpper(), StringComparison.OrdinalIgnoreCase))
-            return trimmed;
+        var url = $"{Config.BaseUrl}/result?stations={icaoCode.ToUpper()}&obsType=1&obsType=2&hours=0";
+        var response = await GetWithResilienceAsync(url, ct);
+        if (response == null || !response.IsSuccessStatusCode) return (null, null);
 
-        // JSON yapısı dene
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
+        var html = await response.Content.ReadAsStringAsync(ct);
+        var items = ExtractDataLastItems(html);
 
-            // { "metar": "..." }
-            if (root.TryGetProperty("metar", out var m) && m.GetString() is { } s1) return s1;
+        // observationType: 4=METAR, 5=SPECI, 6=TAF
+        var metarRaw = items.FirstOrDefault(x => x.Type is 4 or 5)?.Text;
+        var tafRaw   = items.FirstOrDefault(x => x.Type == 6)?.Text;
 
-            // { "raw": "..." }
-            if (root.TryGetProperty("raw", out var r) && r.GetString() is { } s2) return s2;
-
-            // { "data": { "metar": "..." } }
-            if (root.TryGetProperty("data", out var d))
-            {
-                if (d.TryGetProperty("metar", out var dm) && dm.GetString() is { } s3) return s3;
-                if (d.TryGetProperty("raw", out var dr) && dr.GetString() is { } s4) return s4;
-            }
-
-            // Array: [ { "metar": "..." }, ... ]
-            if (root.ValueKind == JsonValueKind.Array && root.GetArrayLength() > 0)
-            {
-                var first = root[0];
-                if (first.TryGetProperty("metar", out var am) && am.GetString() is { } s5) return s5;
-                if (first.TryGetProperty("raw", out var ar) && ar.GetString() is { } s6) return s6;
-            }
-        }
-        catch { /* JSON değil, düz metin olabilir */ }
-
-        return null;
+        return (metarRaw, tafRaw);
     }
 
-    private static string? ExtractRawTaf(string json, string icaoCode)
-    {
-        var trimmed = json.Trim().Trim('"');
-        if (trimmed.StartsWith("TAF", StringComparison.OrdinalIgnoreCase)) return trimmed;
+    private static readonly Regex NextDataRegex =
+        new(@"<script id=""__NEXT_DATA__"" type=""application/json"">(.*?)</script>",
+            RegexOptions.Singleline | RegexOptions.Compiled);
 
-        try
+    private record ObsItem(int Type, string Text);
+
+    private static List<ObsItem> ExtractDataLastItems(string html)
+    {
+        var match = NextDataRegex.Match(html);
+        if (!match.Success) return [];
+
+        using var doc = JsonDocument.Parse(match.Groups[1].Value);
+        var root = doc.RootElement;
+
+        if (!root.TryGetProperty("props", out var props) ||
+            !props.TryGetProperty("pageProps", out var pageProps) ||
+            !pageProps.TryGetProperty("response", out var responseArr) ||
+            responseArr.ValueKind != JsonValueKind.Array ||
+            responseArr.GetArrayLength() == 0)
+            return [];
+
+        var results = new List<ObsItem>();
+
+        // Her istasyon için dataLast dizisini tara
+        foreach (var station in responseArr.EnumerateArray())
         {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.TryGetProperty("taf", out var t) && t.GetString() is { } s1) return s1;
-            if (root.TryGetProperty("raw", out var r) && r.GetString() is { } s2) return s2;
-            if (root.ValueKind == JsonValueKind.Array && root.GetArrayLength() > 0)
+            if (!station.TryGetProperty("dataLast", out var dataLast) ||
+                dataLast.ValueKind != JsonValueKind.Array)
+                continue;
+
+            foreach (var item in dataLast.EnumerateArray())
             {
-                var first = root[0];
-                if (first.TryGetProperty("taf", out var at) && at.GetString() is { } s3) return s3;
-                if (first.TryGetProperty("raw", out var ar) && ar.GetString() is { } s4) return s4;
+                if (!item.TryGetProperty("observationType", out var typeProp)) continue;
+                if (!item.TryGetProperty("observationText", out var textProp)) continue;
+
+                var type = typeProp.GetInt32();
+                var text = textProp.GetString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(text))
+                    results.Add(new ObsItem(type, text));
             }
         }
-        catch { }
 
-        return null;
-    }
-
-    private static List<string> ExtractRawMetarList(string json)
-    {
-        var results = new List<string>();
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            var array = root.ValueKind == JsonValueKind.Array ? root
-                : root.TryGetProperty("data", out var d) ? d : default;
-
-            if (array.ValueKind == JsonValueKind.Array)
-                foreach (var item in array.EnumerateArray())
-                {
-                    if (item.TryGetProperty("metar", out var m) && m.GetString() is { } s) results.Add(s);
-                    else if (item.TryGetProperty("raw", out var r) && r.GetString() is { } s2) results.Add(s2);
-                }
-        }
-        catch { }
         return results;
     }
 }
