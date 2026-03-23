@@ -236,10 +236,11 @@ public class ApiService
                 $"api/notam/bulk?icaos={joined}", ct);
             return dtos?.Select(d => new NotamSummaryViewModel
             {
-                AirportIdent  = d.AirportIdent,
-                ActiveCount   = d.ActiveCount,
-                HasVfrWarning = d.HasVfrWarning,
-                HasVfrCaution = d.HasVfrCaution
+                AirportIdent          = d.AirportIdent,
+                ActiveCount           = d.ActiveCount,
+                HasOperationsCritical = d.HasOperationsCritical,
+                HasVfrWarning         = d.HasVfrWarning,
+                HasVfrCaution         = d.HasVfrCaution
             }).ToList() ?? [];
         }
         catch { return []; }
@@ -324,6 +325,7 @@ public class ApiService
     private record NotamSummaryDto(
         string AirportIdent,
         int ActiveCount,
+        bool HasOperationsCritical,
         bool HasVfrWarning,
         bool HasVfrCaution
     );

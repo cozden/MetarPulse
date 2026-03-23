@@ -13,7 +13,7 @@ namespace MetarPulse.Api.Controllers;
 public class NotamController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly INotamProvider _notamProvider;
+    private readonly INotamAggregator _notamProvider;
     private readonly IMemoryCache _cache;
     private readonly ILogger<NotamController> _logger;
 
@@ -22,7 +22,7 @@ public class NotamController : ControllerBase
 
     public NotamController(
         AppDbContext db,
-        INotamProvider notamProvider,
+        INotamAggregator notamProvider,
         IMemoryCache cache,
         ILogger<NotamController> logger)
     {
@@ -78,6 +78,7 @@ public class NotamController : ControllerBase
             result.Add(new NotamSummaryDto(
                 icao,
                 notams.Count,
+                notams.Any(n => n.VfrImpact == nameof(NotamVfrImpact.OperationsCritical)),
                 notams.Any(n => n.VfrImpact == nameof(NotamVfrImpact.Warning)),
                 notams.Any(n => n.VfrImpact == nameof(NotamVfrImpact.Caution))
             ));
@@ -185,6 +186,7 @@ public record NotamDto(
 public record NotamSummaryDto(
     string AirportIdent,
     int ActiveCount,
+    bool HasOperationsCritical,
     bool HasVfrWarning,
     bool HasVfrCaution
 );

@@ -1,5 +1,6 @@
 using MetarPulse.Abstractions.Providers;
 using MetarPulse.Api.Hubs;
+using MetarPulse.Infrastructure.Providers.Notam;
 using MetarPulse.Core.Enums;
 using MetarPulse.Infrastructure.Persistence.PostgreSQL;
 using Microsoft.AspNetCore.SignalR;
@@ -63,7 +64,7 @@ public class NotamPollingService : BackgroundService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var provider = scope.ServiceProvider.GetRequiredService<INotamProvider>();
+            var provider = scope.ServiceProvider.GetRequiredService<INotamAggregator>();
 
             // Tüm bookmark'lanan benzersiz ICAO'lar
             var stations = await db.UserBookmarks
@@ -102,7 +103,7 @@ public class NotamPollingService : BackgroundService
 
     private async Task UpdateNotamsForStationAsync(
         AppDbContext db,
-        INotamProvider provider,
+        INotamAggregator provider,
         string icao,
         CancellationToken ct)
     {

@@ -1,4 +1,5 @@
 using MetarPulse.Abstractions.Providers;
+using MetarPulse.Infrastructure.Providers.Notam;
 using MetarPulse.Infrastructure.Providers.Weather;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,6 +49,16 @@ public static class ProviderRegistration
 
         // Provider Manager — Singleton: provider chain her zaman güncel state'i yansıtır
         services.AddSingleton<IProviderManager, RegionBasedProviderManager>();
+
+        // ── NOTAM Provider'lar ──────────────────────────────────────────────
+        // Her biri INotamProvider olarak kaydedilir; aggregator hepsini toplar.
+        services.AddSingleton<INotamProvider, AviationWeatherNotamProvider>();
+        services.AddSingleton<INotamProvider, FaaNotamSearchProvider>();
+        services.AddSingleton<INotamProvider, AutorouterNotamProvider>();
+
+        // Aggregator: NotamController ve NotamPollingService bu arayüzü inject eder.
+        // IEnumerable<INotamProvider> → yukarıdaki üç provider'ı alır (aggregator kendisi hariç).
+        services.AddSingleton<INotamAggregator, NotamProviderAggregator>();
 
         return services;
     }
