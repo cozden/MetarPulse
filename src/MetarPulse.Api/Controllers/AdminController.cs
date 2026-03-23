@@ -271,13 +271,26 @@ public class AdminController : ControllerBase
         var results = await Task.WhenAll(tasks);
 
         var fetched = results.Where(r => r != null).Cast<Metar>().ToList();
-        if (fetched.Count > 0)
+        int saved = 0;
+        foreach (var fresh in fetched)
         {
-            _db.MetarHistory.AddRange(fetched);
-            await _db.SaveChangesAsync(ct);
+            var existing = await _db.MetarHistory
+                .Where(m => m.StationId == fresh.StationId && m.ObservationTime == fresh.ObservationTime)
+                .FirstOrDefaultAsync(ct);
+
+            if (existing != null)
+                existing.FetchedAt = fresh.FetchedAt;
+            else
+            {
+                _db.MetarHistory.Add(fresh);
+                saved++;
+            }
         }
 
-        return Ok(new { message = $"{fetched.Count}/{icaos.Count} meydan yenilendi", refreshed = fetched.Count });
+        if (fetched.Count > 0)
+            await _db.SaveChangesAsync(ct);
+
+        return Ok(new { message = $"{fetched.Count}/{icaos.Count} meydan yenilendi ({saved} yeni kayıt)", refreshed = fetched.Count });
     }
 
     /// <summary>DELETE /api/admin/cache/{icao} — Bir meydanın tüm METAR geçmişini sil</summary>
