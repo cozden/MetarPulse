@@ -36,6 +36,31 @@
     </div>
 </div>
 
+@* ── Provider Durum Kartları ─────────────────────────────────────────────── *@
+@if (_providers.Count > 0)
+{
+    <div class="flex flex-wrap gap-3 mb-5">
+        @foreach (var p in _providers)
+        {
+            <div class="flex items-center gap-2 bg-base-200 rounded-lg px-3 py-2 text-sm">
+                <span class="font-mono font-semibold text-base-content/80">@p.ProviderName</span>
+                @if (!p.IsEnabled)
+                {
+                    <span class="badge badge-ghost badge-xs">Pasif</span>
+                }
+                else if (p.IsHealthy)
+                {
+                    <span class="badge badge-success badge-xs">OK</span>
+                }
+                else
+                {
+                    <span class="badge badge-error badge-xs">HATA</span>
+                }
+            </div>
+        }
+    </div>
+}
+
 @* ── Filtreler ───────────────────────────────────────────────────────────── *@
 <div class="flex flex-wrap items-center gap-3 mb-4">
     <input class="input input-bordered input-sm w-32"
@@ -46,6 +71,7 @@
 
     <select class="select select-bordered select-sm" @bind="_filterImpact" @bind:after="SearchAsync">
         <option value="">Tüm Etkiler</option>
+        <option value="OperationsCritical">OPS KISITMASI</option>
         <option value="Warning">Warning</option>
         <option value="Caution">Caution</option>
         <option value="Advisory">Advisory</option>
@@ -216,7 +242,12 @@ else
     private int? _deleteTarget;
     private string _deleteTargetLabel = "";
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private List<NotamProviderVm> _providers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(LoadAsync(), LoadProvidersAsync());
+    }
 
     private async Task LoadAsync()
     {
@@ -240,6 +271,22 @@ else
             Logger.LogError(ex, "NOTAM listesi yüklenemedi");
         }
         finally { _loading = false; }
+    }
+
+    private async Task LoadProvidersAsync()
+    {
+        try
+        {
+            var http = HttpFactory.CreateClient("MetarPulseApi");
+            var result = await http.GetFromJsonAsync<List<NotamProviderDto>>("api/admin/notams/providers");
+            _providers = result?.Select(p => new NotamProviderVm
+            {
+                ProviderName = p.ProviderName,
+                IsEnabled    = p.IsEnabled,
+                IsHealthy    = p.IsHealthy
+            }).ToList() ?? [];
+        }
+        catch { _providers = []; }
     }
 
     private async Task SearchAsync() { _page = 1; await LoadAsync(); }
@@ -326,10 +373,11 @@ else
 
     private static string ImpactBadge(string impact) => impact switch
     {
-        "Warning"  => "badge-error",
-        "Caution"  => "badge-warning",
-        "Advisory" => "badge-info",
-        _          => "badge-ghost"
+        "OperationsCritical" => "badge-error animate-pulse",
+        "Warning"            => "badge-error",
+        "Caution"            => "badge-warning",
+        "Advisory"           => "badge-info",
+        _                    => "badge-ghost"
     };
 
     private static NotamVm Map(NotamDto d) => new()
@@ -360,6 +408,7 @@ else
 
     private record PollResult(string Message, int Fetched, int Added);
     private record PurgeResult(string Message, int Deleted);
+    private record NotamProviderDto(string ProviderName, bool IsEnabled, bool IsHealthy);
 
     private class NotamVm
     {
@@ -375,5 +424,12 @@ else
         public string RawText { get; set; } = "";
         public string SourceProvider { get; set; } = "";
         public bool IsExpired => !IsPermanent && EffectiveTo.HasValue && EffectiveTo.Value < DateTime.UtcNow;
+    }
+
+    private class NotamProviderVm
+    {
+        public string ProviderName { get; set; } = "";
+        public bool   IsEnabled    { get; set; }
+        public bool   IsHealthy    { get; set; }
     }
 }

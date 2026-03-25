@@ -18,7 +18,7 @@ public class AdminController : ControllerBase
     private readonly AppDbContext _db;
     private readonly UserManager<ApplicationUser> _users;
     private readonly IProviderManager _providerManager;
-    private readonly INotamProvider _notamProvider;
+    private readonly INotamAggregator _notamProvider;
     private readonly AdminLogBuffer _logBuffer;
     private readonly SystemSettingsService _sysSettings;
     private readonly IConfiguration _config;
@@ -28,7 +28,7 @@ public class AdminController : ControllerBase
         AppDbContext db,
         UserManager<ApplicationUser> users,
         IProviderManager providerManager,
-        INotamProvider notamProvider,
+        INotamAggregator notamProvider,
         AdminLogBuffer logBuffer,
         SystemSettingsService sysSettings,
         IConfiguration config,
@@ -422,6 +422,33 @@ public class AdminController : ControllerBase
             .ExecuteDeleteAsync(ct);
 
         return Ok(new { message = $"{count} süresi dolmuş NOTAM silindi", deleted = count });
+    }
+
+    /// <summary>GET /api/admin/notams/providers — NOTAM provider listesi ve sağlık durumu</summary>
+    [HttpGet("notams/providers")]
+    public async Task<IActionResult> GetNotamProviders(CancellationToken ct)
+    {
+        var providers = _notamProvider.GetAllProviders();
+        var results = new List<object>();
+
+        foreach (var p in providers)
+        {
+            bool healthy = false;
+            if (p.IsEnabled)
+            {
+                try { healthy = await p.HealthCheckAsync(ct); }
+                catch { healthy = false; }
+            }
+
+            results.Add(new
+            {
+                providerName = p.ProviderName,
+                isEnabled    = p.IsEnabled,
+                isHealthy    = healthy
+            });
+        }
+
+        return Ok(results);
     }
 
     // ── Log görüntüleyici ─────────────────────────────────────────────────────
