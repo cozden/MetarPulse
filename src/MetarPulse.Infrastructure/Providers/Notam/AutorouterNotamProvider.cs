@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using MetarPulse.Abstractions.Providers;
 using MetarPulse.Core.Enums;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NotamModel = MetarPulse.Core.Models.Notam;
 
@@ -11,15 +12,15 @@ namespace MetarPulse.Infrastructure.Providers.Notam;
 /// <summary>
 /// autorouter.aero NOTAM servisi — EUROCONTROL NM verisini yansıtır.
 /// Endpoint: GET https://autorouter.aero/api/v1/notam?location={ICAO}
-/// Avrupa (ECAC) meydanları için birincil EUROCONTROL kaynağı.
-/// API key gerektirmez.
+/// Avrupa (ECAC) meydanları için EUROCONTROL kaynağı.
+/// NOT: Public API erişimi doğrulanana kadar appsettings'de Enabled=false.
 /// </summary>
 public class AutorouterNotamProvider : INotamProvider
 {
     public string ProviderName => "AUTOROUTER";
-    public bool IsEnabled => true;
+    public bool IsEnabled { get; }
 
-    private const string BaseUrl = "https://autorouter.aero/api/v1/notam";
+    private readonly string _baseUrl;
 
     private static readonly HttpClient _http = new(new SocketsHttpHandler
     {
@@ -41,9 +42,12 @@ public class AutorouterNotamProvider : INotamProvider
 
     private readonly ILogger<AutorouterNotamProvider> _logger;
 
-    public AutorouterNotamProvider(ILogger<AutorouterNotamProvider> logger)
+    public AutorouterNotamProvider(IConfiguration config, ILogger<AutorouterNotamProvider> logger)
     {
         _logger = logger;
+        var section = config.GetSection("NotamProviders:AUTOROUTER");
+        IsEnabled = section.GetValue<bool>("Enabled", false);
+        _baseUrl  = section.GetValue<string>("BaseUrl") ?? "https://autorouter.aero/api/v1/notam";
     }
 
     public async Task<IReadOnlyList<NotamModel>> GetNotamsAsync(string icao, CancellationToken ct = default)
@@ -75,7 +79,7 @@ public class AutorouterNotamProvider : INotamProvider
     {
         try
         {
-            var url = $"{BaseUrl}?location={icao}";
+            var url = $"{_baseUrl}?location={icao}";
             var response = await _http.GetAsync(url, ct);
 
             if (!response.IsSuccessStatusCode)

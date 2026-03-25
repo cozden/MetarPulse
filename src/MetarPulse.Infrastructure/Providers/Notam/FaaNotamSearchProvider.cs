@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using MetarPulse.Abstractions.Providers;
 using MetarPulse.Core.Enums;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NotamModel = MetarPulse.Core.Models.Notam;
 
@@ -15,9 +16,9 @@ namespace MetarPulse.Infrastructure.Providers.Notam;
 public class FaaNotamSearchProvider : INotamProvider
 {
     public string ProviderName => "FAA_NOTAM";
-    public bool IsEnabled => true;
+    public bool IsEnabled { get; }
 
-    private const string BaseUrl = "https://notams.aim.faa.gov/notamSearch/search";
+    private readonly string _baseUrl;
     private const int PageSize = 300; // Tek istekte max NOTAM sayısı
 
     private static readonly HttpClient _http = new(new SocketsHttpHandler
@@ -38,9 +39,12 @@ public class FaaNotamSearchProvider : INotamProvider
 
     private readonly ILogger<FaaNotamSearchProvider> _logger;
 
-    public FaaNotamSearchProvider(ILogger<FaaNotamSearchProvider> logger)
+    public FaaNotamSearchProvider(IConfiguration config, ILogger<FaaNotamSearchProvider> logger)
     {
         _logger = logger;
+        var section = config.GetSection("NotamProviders:FAA_NOTAM");
+        IsEnabled = section.GetValue<bool>("Enabled", true);
+        _baseUrl  = section.GetValue<string>("BaseUrl") ?? "https://notams.aim.faa.gov/notamSearch/search";
     }
 
     public async Task<IReadOnlyList<NotamModel>> GetNotamsAsync(string icao, CancellationToken ct = default)
@@ -91,7 +95,7 @@ public class FaaNotamSearchProvider : INotamProvider
                 ["longSeconds"]             = ""
             });
 
-            var response = await _http.PostAsync(BaseUrl, body, ct);
+            var response = await _http.PostAsync(_baseUrl, body, ct);
 
             if (!response.IsSuccessStatusCode)
             {

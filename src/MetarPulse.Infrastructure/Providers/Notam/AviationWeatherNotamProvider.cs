@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using MetarPulse.Abstractions.Providers;
 using MetarPulse.Core.Enums;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NotamModel = MetarPulse.Core.Models.Notam;
 
@@ -14,9 +15,9 @@ namespace MetarPulse.Infrastructure.Providers.Notam;
 public class AviationWeatherNotamProvider : INotamProvider
 {
     public string ProviderName => "AWC_NOTAM";
-    public bool IsEnabled => true;
+    public bool IsEnabled { get; }
 
-    private const string BaseUrl = "https://aviationweather.gov/api/data/notam";
+    private readonly string _baseUrl;
 
     private static readonly HttpClient _http = new(new SocketsHttpHandler
     {
@@ -30,9 +31,12 @@ public class AviationWeatherNotamProvider : INotamProvider
 
     private readonly ILogger<AviationWeatherNotamProvider> _logger;
 
-    public AviationWeatherNotamProvider(ILogger<AviationWeatherNotamProvider> logger)
+    public AviationWeatherNotamProvider(IConfiguration config, ILogger<AviationWeatherNotamProvider> logger)
     {
         _logger = logger;
+        var section = config.GetSection("NotamProviders:AWC_NOTAM");
+        IsEnabled = section.GetValue<bool>("Enabled", true);
+        _baseUrl  = section.GetValue<string>("BaseUrl") ?? "https://aviationweather.gov/api/data/notam";
     }
 
     public async Task<IReadOnlyList<NotamModel>> GetNotamsAsync(string icao, CancellationToken ct = default)
@@ -54,7 +58,7 @@ public class AviationWeatherNotamProvider : INotamProvider
     {
         try
         {
-            var response = await _http.GetAsync($"{BaseUrl}?ids=KJFK&format=json", ct);
+            var response = await _http.GetAsync($"{_baseUrl}?ids=KJFK&format=json", ct);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -69,7 +73,7 @@ public class AviationWeatherNotamProvider : INotamProvider
     {
         try
         {
-            var url = $"{BaseUrl}?ids={icao}&format=json";
+            var url = $"{_baseUrl}?ids={icao}&format=json";
             var response = await _http.GetAsync(url, ct);
 
             if (!response.IsSuccessStatusCode)
